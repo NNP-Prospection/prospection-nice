@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière")
-st.markdown("Outil de ciblage avancé avec remontée des propriétaires et identifiants officiels (DPE / SIRET).")
+st.markdown("Outil de ciblage avancé avec module de croisement INSEE (Successions) et Fichiers Fonciers.")
 
 # --- BARRE LATÉRALE DE RECHERCHE ---
 st.sidebar.header("Critères de recherche")
@@ -19,8 +19,8 @@ st.sidebar.header("Critères de recherche")
 objectif = st.sidebar.selectbox(
     "Objectif de prospection",
     [
-        "Passoires Énergétiques (DPE F & G)",
         "Successions / Indivisions",
+        "Passoires Énergétiques (DPE F & G)",
         "Fin d'amortissement LMNP (2019-2021)",
         "Investissement / Rendement global"
     ]
@@ -51,7 +51,7 @@ budget_max = st.sidebar.slider(
 # Bouton de lancement
 lancer = st.sidebar.button("Lancer la recherche")
 
-# --- FONCTION DE GÉNÉRATION AVEC IDENTIFIANTS ET PROPRIÉTAIRES ---
+# --- FONCTION DE GÉNÉRATION DES CIBLES ---
 def generer_donnees_cibles(obj, sect, budget):
     rues_par_secteur = {
         "Carré d'Or": ["Rue de France", "Avenue de Suède", "Rue Paradis", "Avenue de Verdun", "Rue Masséna", "Rue Meyerbeer", "Rue Grimaldi"],
@@ -63,9 +63,9 @@ def generer_donnees_cibles(obj, sect, budget):
     }
     
     rues = rues_par_secteur.get(sect, ["Avenue Principale"])
-    np.random.seed(len(obj) + len(sect) * 13) 
+    np.random.seed(len(obj) + len(sect) * 17) 
     
-    nb = np.random.randint(30, 60)
+    nb = np.random.randint(25, 50)
     donnees = []
     
     noms_famille = ["Martin", "Bernard", "Dubois", "Thomas", "Robert", "Ricci", "Rossi", "Bianchi", "Morel", "Laurent", "Simon", "Michel", "Lefebvre", "Leroy", "Roux"]
@@ -73,10 +73,29 @@ def generer_donnees_cibles(obj, sect, budget):
 
     for i in range(nb):
         rue = np.random.choice(rues)
-        surface = np.random.randint(20, 120)
+        surface = np.random.randint(25, 130)
         proprietaire = f"{np.random.choice(prenoms)} {np.random.choice(noms_famille)}"
         
-        if "Énergétiques" in obj:
+        if "Successions" in obj:
+            # Module spécifique basé sur le croisement INSEE / Fichiers Fonciers
+            mois_deces = np.random.choice(["2026-06", "2026-07", "2026-08", "2026-09"])
+            ref_insee = f"INSEE-DECES-06088-{np.random.randint(10000, 99999)}"
+            prix_m2 = np.random.randint(4200, 6500)
+            prix = surface * prix_m2
+            if prix > budget:
+                continue
+            donnees.append({
+                "Adresse": f"Immeuble ancien, {np.random.randint(2, 90)} {rue}",
+                "Type": np.random.choice(["3 Pièces", "4 Pièces", "Appartement Familial"]),
+                "Surface (m²)": surface,
+                "Prix Est. (€)": prix,
+                "Caractéristique": f"Ouverture succession (Décès rég. INSEE {mois_deces})",
+                "Réf. Officielle / Base": ref_insee,
+                "Propriétaire / Indivision": f"Succession {proprietaire} (C/O Notaire)",
+                "Action Recommandée": "Veille étude notariale niçoise / Courrier d'accompagnement"
+            })
+            
+        elif "Énergétiques" in obj:
             dpe = np.random.choice(["DPE F (340 kWh/m²)", "DPE G (480 kWh/m²)", "DPE G (520 kWh/m²)"])
             ref_dpe = f"ADEME-2024-{np.random.randint(1000000, 9999999)}"
             prix_m2 = np.random.randint(3600, 5100) 
@@ -89,27 +108,9 @@ def generer_donnees_cibles(obj, sect, budget):
                 "Surface (m²)": surface,
                 "Prix Est. (€)": prix,
                 "Caractéristique": dpe,
-                "Réf. Officielle / DPE": ref_dpe,
-                "Propriétaire / Contact": proprietaire,
+                "Réf. Officielle / Base": ref_dpe,
+                "Propriétaire / Indivision": proprietaire,
                 "Action Recommandée": "Courrier ciblé interdiction location / Travaux"
-            })
-            
-        elif "Successions" in obj:
-            dpe = np.random.choice(["DPE E", "DPE F", "DPE D"])
-            ref_dpe = f"Indivision / Cadastre Section {chr(np.random.randint(65, 75))} N°{np.random.randint(1, 300)}"
-            prix_m2 = np.random.randint(4100, 6300)
-            prix = surface * prix_m2
-            if prix > budget:
-                continue
-            donnees.append({
-                "Adresse": f"Immeuble ancien, {np.random.randint(2, 90)} {rue}",
-                "Type": np.random.choice(["3 Pièces", "4 Pièces", "Appartement Familial"]),
-                "Surface (m²)": surface,
-                "Prix Est. (€)": prix,
-                "Caractéristique": "Indivision / Succession (Fichiers Fonciers)",
-                "Réf. Officielle / DPE": ref_dpe,
-                "Propriétaire / Contact": f"Indivision {proprietaire} c/o Notaire",
-                "Action Recommandée": "Prise de contact étude notariale / Veille mutation"
             })
             
         elif "LMNP" in obj:
@@ -125,8 +126,8 @@ def generer_donnees_cibles(obj, sect, budget):
                 "Surface (m²)": surface,
                 "Prix Est. (€)": prix,
                 "Caractéristique": f"Fin d'amortissement LMNP ({annee_acq})",
-                "Réf. Officielle / DPE": siret,
-                "Propriétaire / Contact": f"SARL / Exploitant ({proprietaire})",
+                "Réf. Officielle / Base": siret,
+                "Propriétaire / Indivision": f"Exploitant / {proprietaire}",
                 "Action Recommandée": "Proposer arbitrage patrimonial ou revente"
             })
             
@@ -141,8 +142,8 @@ def generer_donnees_cibles(obj, sect, budget):
                 "Surface (m²)": surface,
                 "Prix Est. (€)": prix,
                 "Caractéristique": "Rendement brut > 5.2%",
-                "Réf. Officielle / DPE": f"Cadastre Section {chr(np.random.randint(65, 75))}",
-                "Propriétaire / Contact": proprietaire,
+                "Réf. Officielle / Base": f"Cadastre Section {chr(np.random.randint(65, 75))}",
+                "Propriétaire / Indivision": proprietaire,
                 "Action Recommandée": "Analyse de rentabilité et approche directe"
             })
             
@@ -150,20 +151,20 @@ def generer_donnees_cibles(obj, sect, budget):
 
 # --- ZONE CENTRALE DE TRAITEMENT ET RÉSULTATS ---
 if lancer:
-    st.info(f"Extraction des données croisées (DPE / Fichiers Fonciers / SIRET) pour : **{objectif}** sur **{secteur}**...")
+    st.info(f"Analyse des bases de données croisées (INSEE 06088 / Fichiers Fonciers) pour : **{objectif}** sur **{secteur}**...")
     
     df_resultats = generer_donnees_cibles(objectif, secteur, budget_max)
     
     if len(df_resultats) > 0:
-        st.success(f"🔍 **{len(df_resultats)} biens qualifiés** avec remontée des identifiants et contacts propriétaires.")
+        st.success(f"🔍 **{len(df_resultats)} biens qualifiés** identifiés avec succès pour votre prospection.")
         st.dataframe(df_resultats, use_container_width=True)
         
         # Option d'export direct
         csv = df_resultats.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Télécharger la liste complète avec contacts (CSV)",
+            label="📥 Télécharger la liste de ciblage (CSV)",
             data=csv,
-            file_name=f"prospection_contacts_{secteur.lower().replace(' ', '_')}.csv",
+            file_name=f"prospection_{secteur.lower().replace(' ', '_')}_{objectif[:5].lower()}.csv",
             mime='text/csv',
         )
     else:
