@@ -55,7 +55,7 @@ if lancer_recherche:
             else:
                 st.error("Erreur lors de la connexion à l'API de l'ADEME.")
         except Exception as e:
-            st.warning(fImpossible de joindre l'API pour le moment : {e}")
+            st.warning(f"Impossible de joindre l'API pour le moment : {e}")
 
     elif type_prospection == "Fin d'amortissement LMNP (5-7 ans)":
         st.write("### Analyse des loueurs en fin de défiscalisation (2019-2021)")
