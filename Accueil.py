@@ -87,7 +87,7 @@ def enrichir_sci_avec_sirene(df_passoires, nom_colonne_proprietaire="proprietair
     for nom in df_passoires[col_prop]:
         infos = chercher_siren_et_siege_local(nom)
         sirens.append(infos['siren'])
-        sieges.append(infos['siège'])
+        sieges.append(infos.get('siège', infos.get('siege', 'N/A'))) 
         
     df_passoires['N° SIREN'] = sirens
     df_passoires['Siège Social'] = sieges
