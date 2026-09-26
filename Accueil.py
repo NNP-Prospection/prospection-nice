@@ -1,6 +1,48 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
+import streamlit as st
+import pandas as pd
+import numpy as np
+import requests
+
+def enrichir_sci_avec_sirene(df_passoires, nom_colonne_proprietaire="proprietaire"):
+    """
+    Interroge l'API officielle de data.gouv.fr pour trouver le SIRET et l'adresse 
+    officielle d'une SCI à Nice, puis croise les données.
+    """
+    resultats_enrichis = []
+    
+    for index, row in df_passoires.iterrows():
+        nom_sci = str(row.get(nom_colonne_proprietaire, ""))
+        
+        # On cible les SCI identifiées
+        if "SCI" in nom_sci.upper():
+            url = f"https://recherche-entreprises.api.gouv.fr/search?q={nom_sci}&code_postal=06000"
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    data = response.json().get("results", [])
+                    if len(data) > 0:
+                        entreprise = data[0]
+                        row["siret_officiel"] = entreprise.get("siret", "")
+                        row["adresse_siege_social"] = entreprise.get("adresse", "")
+                        dirigeants = entreprise.get("dirigeants", [])
+                        row["dirigeant"] = dirigeants[0].get("nom", "Inconnu") if dirigeants else "Inconnu"
+                    else:
+                        row["siret_officiel"] = "Non trouvé"
+                        row["adresse_siege_social"] = "Non trouvé"
+                else:
+                    row["siret_officiel"] = "Erreur API"
+            except Exception as e:
+                row["siret_officiel"] = "Erreur"
+        else:
+            row["siret_officiel"] = "N/A"
+                
+        resultats_enrichis.append(row)
+        
+    return pd.DataFrame(resultats_enrichis)
 
 # Configuration de la page
 st.set_page_config(
