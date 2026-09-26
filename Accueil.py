@@ -82,17 +82,16 @@ def enrichir_sci_avec_sirene(df_passoires, nom_colonne_proprietaire="proprietair
     sirens = []
     sieges = []
     
-    # On suppose que la colonne contenant le nom du propriétaire s'appelle 'Propriétaire / Contact' ou 'propriétaire'
-    col_prop = 'Propriétaire / Contact' if 'Propriétaire / Contact' in donnees.columns else donnees.columns[0]
+    col_prop = 'Propriétaire / Contact' if 'Propriétaire / Contact' in df_passoires.columns else df_passoires.columns[0]
     
-    for nom in donnees[col_prop]:
+    for nom in df_passoires[col_prop]:
         infos = chercher_siren_et_siege_local(nom)
         sirens.append(infos['siren'])
-        sieges.append(infos['siege'])
+        sieges.append(infos['siège'])
         
-    donnees['N° SIREN'] = sirens
-    donnees['Siège Social'] = sieges        
-    return pd.DataFrame(resultats_enrichis)
+    df_passoires['N° SIREN'] = sirens
+    df_passoires['Siège Social'] = sieges
+    return df_passoires
 
 # Configuration de la page
 st.set_page_config(
