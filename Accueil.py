@@ -240,12 +240,11 @@ if lancer:
     st.info(f"Génération de la base certifiée pour : **{objectif}** sur le secteur **{secteur}**...")
     
     df_resultats = generer_listing_maitre_strict(objectif, secteur, budget_max)
-     if len(df_resultats) > 0:
-      # On applique l'enrichissement officiel si l'objectif concerne les passoires énergétiques
-if "Passoires" in str(objectif):
-    df_resultats = enrichir_sci_avec_sirene(df_resultats)         
-st.success(f"🎯 **{len(df_resultats)} biens uniques et vérifiés** trouvés pour cet objectif !")
-st.dataframe(df_resultats, use_container_width=True)
+    if len(df_resultats) > 0:
+        if "Passoires" in str(objectif):
+            df_resultats = enrichir_sci_avec_sirene(df_resultats)
+        st.success(f"✅ **{len(df_resultats)}** biens uniques et vérifiés trouvés pour cet objectif !")
+        st.dataframe(df_resultats, use_container_width=True)
         
         csv = df_resultats.to_csv(index=False).encode('utf-8')
         st.download_button(
@@ -255,6 +254,7 @@ st.dataframe(df_resultats, use_container_width=True)
             mime='text/csv',
         )
     else:
+        st.warning("Aucun bien ne correspond à cet objectif et à ce budget dans ce secteur.")
         st.warning("Aucun bien ne correspond à cet objectif et à ce budget dans ce secteur.")
 else:
     st.markdown("👉 Sélectionnez vos critères dans le menu à gauche et cliquez sur **'Générer le listing certifié'**.")
