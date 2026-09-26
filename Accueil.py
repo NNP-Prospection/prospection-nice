@@ -1,4 +1,4 @@
-import streamlit as st
+|import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
@@ -6,6 +6,43 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+
+def chercher_siren_et_siege_local(nom_sci):
+    """
+    Interroge l'API officielle pour trouver le SIREN et le siège social,
+    en privilégiant le département 06 (Alpes-Maritimes) pour éviter les homonymes.
+    """
+    if not nom_sci or str(nom_sci).lower() == "nan" or "N/A" in str(nom_sci):
+        return {"siren": "N/A", "siege": "N/A"}
+        
+    url = "https://recherche-entreprises.api.gouv.fr/search"
+    params = {"q": nom_sci, "per_page": 5}
+    
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            resultats = response.json().get("results", [])
+            if resultats:
+                best_match = resultats[0]
+                for res in resultats:
+                    siege = res.get("siege", {})
+                    cp = str(siege.get("code_postal", ""))
+                    if cp.startswith("06"):
+                        best_match = res
+                        break  # Trouvé dans le 06 !
+                
+                siren = best_match.get("siren", "N/A")
+                siege = best_match.get("siege", {})
+                adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
+                
+                return {
+                    "siren": siren,
+                    "siege": adresse_siege.strip(", ") if adresse_siege.strip(", ") else "Adresse non renseignée"
+                }
+    except Exception as e:
+        print(f"Erreur technique API Sirene : {e}")
+        
+    return {"siren": "N/A", "siege": "N/A"}
 
 def enrichir_sci_avec_sirene(df_passoires, nom_colonne_proprietaire="proprietaire"):
     """
@@ -41,7 +78,20 @@ def enrichir_sci_avec_sirene(df_passoires, nom_colonne_proprietaire="proprietair
             row["siret_officiel"] = "N/A"
                 
         resultats_enrichis.append(row)
+# --- ENRICHISSEMENT LOCAL DES SCI ---
+    sirens = []
+    sieges = []
+    
+    # On suppose que la colonne contenant le nom du propriétaire s'appelle 'Propriétaire / Contact' ou 'propriétaire'
+    col_prop = 'Propriétaire / Contact' if 'Propriétaire / Contact' in donnees.columns else donnees.columns[0]
+    
+    for nom in donnees[col_prop]:
+        infos = chercher_siren_et_siege_local(nom)
+        sirens.append(infos['siren'])
+        sieges.append(infos['siege'])
         
+    donnees['N° SIREN'] = sirens
+    donnees['Siège Social'] = sieges        
     return pd.DataFrame(resultats_enrichis)
 
 # Configuration de la page
