@@ -239,7 +239,7 @@ def generer_listing_maitre_strict(obj, sect, budget):
 if lancer:
     st.info(f"Génération de la base certifiée pour : **{objectif}** sur le secteur **{secteur}**...")
     
-     df_resultats = generer_listing_maitre_strict(objectif, secteur, budget_max)
+    df_resultats = generer_listing_maitre_strict(objectif, secteur, budget_max)
      if len(df_resultats) > 0:
       # On applique l'enrichissement officiel si l'objectif concerne les passoires énergétiques
 if "Passoires" in str(objectif):
