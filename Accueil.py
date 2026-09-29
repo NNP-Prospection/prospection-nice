@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+df = pd.read_csv('dpe_nice_fg.csv')
 
 def chercher_siren_et_siege_local(nom_sci):
     """
