@@ -44,7 +44,7 @@ def chercher_infos_entreprise(terme_recherche):
                 dirigeants = best_match.get("dirigeants", [])
                 nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
                 
-                siege = res.get("siege", {})
+                siege = best_match.get("siege", {})
                 adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                 
                 return {
@@ -118,15 +118,13 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Filtrage par secteur si un quartier spécifique est demandé
+        # Filtrage sécurisé par secteur
         if secteur != "Tous les secteurs" and col_adresse:
-            mots_cles = secteur.lower().split('/')
-            # On filtre les lignes dont l'adresse contient le nom du quartier (ex: "France", "Promenade", "Garibaldi", etc.)
-            mask = df_affichage['Adresse Exacte'].astype(str).str.lower().apply(lambda x: any(m.strip() in x for m in mots_cles))
+            terme_filtre = secteur.split('/')[0].strip().lower()
+            mask = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(terme_filtre, na=False)
             df_affichage = df_affichage[mask]
 
         if "SCI" in objectif:
-            # Pour éviter de surcharger l'API si le volume est très important, on prévient ou on limite l'enrichissement aux 50 premiers résultats filtrés
             if len(df_affichage) > 50:
                 st.info("ℹ️ Pour des raisons de performance de l'API Sirene, l'enrichissement SCI est appliqué aux 50 premiers biens de cette sélection.")
                 df_to_enrich = df_affichage.head(50).copy()
