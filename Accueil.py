@@ -9,25 +9,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# Chargement du fichier CSV
-@st.cache_data
-def load_data():
-    try:
-        return pd.read_csv('dpe_nice_fg.csv')
-    except Exception as e:
-        return pd.DataFrame()
-
-df_global = load_data()
-
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : passoires énergétiques (F & G) et enrichissement des propriétaires (SCI & Sociétés).")
+st.markdown("Base de données certifiée : passoires énergétiques (F & G) et ciblage par quartier.")
+
+# Chargement du fichier CSV
+try:
+    df_global = pd.read_csv('dpe_nice_fg.csv')
+except Exception as e:
+    df_global = pd.DataFrame()
+    st.error(f"Erreur critique lors du chargement du fichier CSV : {e}")
 
 # --- FONCTION D'ENRICHISSEMENT DES SOCIÉTÉS / SCI ---
 def chercher_infos_entreprise(terme_recherche):
-    """
-    Interroge l'API officielle de recherche d'entreprises pour trouver 
-    le SIREN, le dirigeant et l'adresse du siège (particulièrement utile pour les SCI).
-    """
     if not terme_recherche or str(terme_recherche).lower() == "nan":
         return {"siren": "N/A", "dirigeant": "N/A", "siege": "N/A"}
         
@@ -35,12 +28,11 @@ def chercher_infos_entreprise(terme_recherche):
     params = {"q": terme_recherche, "per_page": 3}
     
     try:
-        response = requests.get(url, params=params, timeout=4)
+        response = requests.get(url, params=params, timeout=3)
         if response.status_code == 200:
             resultats = response.json().get("results", [])
             if resultats:
                 best_match = resultats[0]
-                # Privilégier le département 06 si possible
                 for res in resultats:
                     siege = res.get("siege", {})
                     cp = str(siege.get("code_postal", ""))
@@ -52,7 +44,7 @@ def chercher_infos_entreprise(terme_recherche):
                 dirigeants = best_match.get("dirigeants", [])
                 nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
                 
-                siege = best_match.get("siege", {})
+                siege = res.get("siege", {})
                 adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                 
                 return {
@@ -71,8 +63,22 @@ st.sidebar.header("Critères de ciblage")
 objectif = st.sidebar.selectbox(
     "Objectif de prospection",
     [
-        "Passoires Énergétiques (DPE F & G) - Standard",
-        "Ciblage Actifs / SCI (Enrichissement SIRENE)"
+        "Passoires Énergétiques (F & G) - Standard",
+        "Ciblage SCI / Sociétés (Enrichissement SIRENE)"
+    ]
+)
+
+# Filtre par secteur / quartier à Nice
+secteur = st.sidebar.selectbox(
+    "Quartier / Secteur à Nice",
+    [
+        "Tous les secteurs",
+        "Carré d'Or",
+        "Promenade des Anglais",
+        "Port / Garibaldi",
+        "Mont Boron",
+        "Musiciens / Gambetta",
+        "Centre-ville"
     ]
 )
 
@@ -81,15 +87,18 @@ lancer = st.sidebar.button("Générer le listing certifié")
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️ Le fichier de données `dpe_nice_fg.csv` n'a pas pu être chargé.")
+        st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
-        # 1. Sélection et renommage des colonnes techniques de l'ADEME
+        # Sélection et renommage des colonnes utiles
         colonnes_utiles = {}
+        col_adresse = None
         if 'adresse_ban' in df_resultats.columns:
+            col_adresse = 'adresse_ban'
             colonnes_utiles['adresse_ban'] = 'Adresse Exacte'
         elif 'adresse_brute' in df_resultats.columns:
+            col_adresse = 'adresse_brute'
             colonnes_utiles['adresse_brute'] = 'Adresse Exacte'
             
         if 'code_postal_ban' in df_resultats.columns:
@@ -109,41 +118,48 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Limiter l'affichage aux 50 premiers pour fluidifier l'appel API si on active l'enrichissement
-        if len(df_affichage) > 50:
-            df_affichage = df_affichage.head(50)
+        # Filtrage par secteur si un quartier spécifique est demandé
+        if secteur != "Tous les secteurs" and col_adresse:
+            mots_cles = secteur.lower().split('/')
+            # On filtre les lignes dont l'adresse contient le nom du quartier (ex: "France", "Promenade", "Garibaldi", etc.)
+            mask = df_affichage['Adresse Exacte'].astype(str).str.lower().apply(lambda x: any(m.strip() in x for m in mots_cles))
+            df_affichage = df_affichage[mask]
 
-        # 2. Gestion selon l'objectif choisi
         if "SCI" in objectif:
-            st.info("🔄 Interrogation de l'API Sirene en cours pour identifier les sociétés et gérants...")
+            # Pour éviter de surcharger l'API si le volume est très important, on prévient ou on limite l'enrichissement aux 50 premiers résultats filtrés
+            if len(df_affichage) > 50:
+                st.info("ℹ️ Pour des raisons de performance de l'API Sirene, l'enrichissement SCI est appliqué aux 50 premiers biens de cette sélection.")
+                df_to_enrich = df_affichage.head(50).copy()
+            else:
+                df_to_enrich = df_affichage.copy()
+
+            st.info("🔄 Interrogation de l'API Sirene en cours pour les sociétés...")
             sirens, dirigeants, sieges = [], [], []
             
-            # Simulation ou recherche sur l'adresse / nom si disponible, sinon test sur des structures types
-            for idx, row in df_affichage.iterrows():
-                # Recherche basée sur l'adresse ou un nom générique de copropriété/SCI si présent dans le fichier
+            for idx, row in df_to_enrich.iterrows():
                 terme_recherche = f"SCI {row.get('Adresse Exacte', '')}"
                 infos = chercher_infos_entreprise(terme_recherche)
                 sirens.append(infos['siren'])
                 dirigeants.append(infos['dirigeant'])
                 sieges.append(infos['siege'])
                 
-            df_affichage['N° SIREN'] = sirens
-            df_affichage['Dirigeant / Gérant'] = dirigeants
-            df_affichage['Siège Social'] = sieges
+            df_to_enrich['N° SIREN'] = sirens
+            df_to_enrich['Dirigeant / Gérant'] = dirigeants
+            df_to_enrich['Siège Social'] = sieges
+            df_affichage = df_to_enrich
         else:
             df_affichage['Propriétaire / Statut'] = "Particulier (À croiser via DVF / Cadastre)"
-            df_affichage['Action Recommandée'] = "Boîtage ciblé / Enquête voisinage"
+            df_affichage['Action Recommandée'] = "Boîtage ciblé"
 
-        st.success(f"✅ Listing généré avec succès ! Affichage de {len(df_affichage)} biens à Nice.")
+        st.success(f"✅ Listing généré avec succès ! **{len(df_affichage)}** biens trouvés pour le secteur : *{secteur}*.")
         st.dataframe(df_affichage, use_container_width=True)
         
-        # Bouton de téléchargement
         csv = df_affichage.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Télécharger ce listing (CSV)",
+            label="📥 Télécharger ce listing complet (CSV)",
             data=csv,
-            file_name="listing_prospection_nice.csv",
+            file_name=f"listing_prospection_{secteur.lower().replace(' ', '_')}.csv",
             mime='text/csv',
         )
 else:
-    st.info("👉 Sélectionnez vos options dans le menu latéral et cliquez sur **'Générer le listing certifié'**.")
+    st.info("👉 Sélectionnez vos critères dans le menu à gauche et cliquez sur **'Générer le listing certifié'**.")
