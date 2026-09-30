@@ -75,10 +75,11 @@ lancer = st.sidebar.button("Générer le listing certifié")
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
+        st.error("⚠️️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
+        # Sélection et renommage des colonnes pertinentes pour le terrain
         colonnes_utiles = {}
         if 'adresse_ban' in df_resultats.columns:
             colonnes_utiles['adresse_ban'] = 'Adresse Exacte'
@@ -88,14 +89,25 @@ if lancer:
         if 'code_postal_ban' in df_resultats.columns:
             colonnes_utiles['code_postal_ban'] = 'Code Postal'
             
-        if 'etiquette_dpe' in df_resultats.columns:
-            colonnes_utiles['etiquette_dpe'] = 'Note DPE'
-            
-        if 'surface_habitable_logement' in df_resultats.columns:
-            colonnes_utiles['surface_habitable_logement'] = 'Surface (m²)'
-            
-        if 'date_etablissement_dpe' in df_resultats.columns:
-            colonnes_utiles['date_etablissement_dpe'] = 'Date DPE'
+        # Ajout des repères d'immeuble / appartement si présents dans le CSV
+        for col_potentielle, nom_propre in [
+            ('numero_appartement', 'N° Appartement'),
+            ('numero_lot', 'N° Lot Copropriété'),
+            ('batiment', 'Bâtiment'),
+            ('escalier', 'Escalier'),
+            ('etage', 'Étage'),
+            ('etiquette_dpe', 'Note DPE'),
+            ('surface_habitable_logement', 'Surface (m²)'),
+            ('date_etablissement_dpe', 'Date DPE')
+        ]:
+            if col_potentielle in df_resultats.columns:
+                colonnes_utiles[col_potentielle] = nom_propre
+            elif 'etiquette_dpe' == col_potentielle and 'etiquette_dpe' in df_resultats.columns:
+                colonnes_utiles['etiquette_dpe'] = 'Note DPE'
+            elif 'surface_habitable_logement' == col_potentielle and 'surface_habitable_logement' in df_resultats.columns:
+                colonnes_utiles['surface_habitable_logement'] = 'Surface (m²)'
+            elif 'date_etablissement_dpe' == col_potentielle and 'date_etablissement_dpe' in df_resultats.columns:
+                colonnes_utiles['date_etablissement_dpe'] = 'Date DPE'
 
         if colonnes_utiles:
             df_affichage = df_resultats[list(colonnes_utiles.keys())].rename(columns=colonnes_utiles)
@@ -127,9 +139,8 @@ if lancer:
         index_fin = index_debut + 50
         df_affichage = df_affichage.iloc[index_debut:index_fin]
 
-        # Colonnes de qualification pour la prospection terrain
-        df_affichage['Propriétaire / Statut'] = "Particulier (Croisement DVF / Cadastre conseillé)"
-        df_affichage['Action Recommandée'] = "Boîtage ciblé / Courrier personnalisé"
+        # Colonne d'action terrain
+        df_affichage['Action Boîtage'] = "Boîtage ciblé (Porte / Boîte aux lettres)"
 
         st.success(f"✅ Listing généré ({tranche_mois}) ! **{len(df_affichage)}** biens affichés pour le secteur : *{secteur}*.")
         st.dataframe(df_affichage, use_container_width=True)
@@ -139,7 +150,7 @@ if lancer:
             label=f"📥 Télécharger ce {tranche_mois} (CSV)",
             data=csv,
             file_name=f"listing_{secteur.lower().replace(' ', '_')}_{tranche_mois.lower().replace(' ', '_')}.csv",
-            mime='text/csv',
+            mime='text/css' if False else 'text/csv',
         )
 else:
     st.info("👉 Sélectionnez vos critères dans le menu à gauche, puis cliquez sur **'Générer le listing certifié'**.")
