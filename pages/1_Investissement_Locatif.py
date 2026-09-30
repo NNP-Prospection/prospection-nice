@@ -5,13 +5,13 @@ from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Investissement Locatif & Fin de Défiscalisation - Nice",
+    page_title="Investissement Locatif & Ciblage SCI - Nice",
     page_icon="📈",
     layout="wide"
 )
 
-st.title("📈 Espace Investisseurs & Fin de Défiscalisation - Nice")
-st.markdown("Ciblage patrimonial : biens en fin d'engagement fiscal (Pinel / amortissements) – Opportunités de revente & réinvestissement.")
+st.title("📈 Espace Investisseurs & Ciblage SCI - Nice")
+st.markdown("Ciblage patrimonial et enrichissement automatique des sociétés via l'API Sirene.")
 
 # Chargement du fichier CSV
 try:
@@ -20,42 +20,48 @@ except Exception as e:
     df_global = pd.DataFrame()
     st.error(f"Erreur critique lors du chargement du fichier CSV : {e}")
 
-# --- FONCTION D'ENRICHISSEMENT DES SOCIÉTÉS / SCI ---
-def chercher_infos_entreprise(terme_recherche):
-    if not terme_recherche or str(terme_recherche).lower() == "nan":
-        return {"siren": "N/A", "dirigeant": "N/A", "siege": "N/A"}
-        
+# --- FONCTION D'ENRICHISSEMENT DES SOCIÉTÉS / SCI (Optimisée) ---
+def chercher_infos_entreprise(terme_recherche, rue_secours=""):
     url = "https://recherche-entreprises.api.gouv.fr/search"
-    params = {"q": terme_recherche, "per_page": 3}
     
-    try:
-        response = requests.get(url, params=params, timeout=3)
-        if response.status_code == 200:
-            resultats = response.json().get("results", [])
-            if resultats:
-                best_match = resultats[0]
-                for res in resultats:
-                    siege = res.get("siege", {})
-                    cp = str(siege.get("code_postal", ""))
-                    if cp.startswith("06"):
-                        best_match = res
-                        break
-                
-                siren = best_match.get("siren", "N/A")
-                dirigeants = best_match.get("dirigeants", [])
-                nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
-                
-                siege = best_match.get("siege", {})
-                adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
-                
-                return {
-                    "siren": siren,
-                    "dirigeant": nom_dirigeant if nom_dirigeant else "Non renseigné",
-                    "siege": adresse_siege.strip(", ") if adresse_siege.strip(", ") else "Adresse non renseignée"
-                }
-    except Exception:
-        pass
+    queries = [terme_recherche]
+    if rue_secours:
+        queries.append(f"SCI {rue_secours} Nice")
+        queries.append(f"Immobilier {rue_secours} Nice")
         
+    for q in queries:
+        if not q or str(q).lower() == "nan":
+            continue
+        params = {"q": q, "per_page": 3}
+        try:
+            response = requests.get(url, params=params, timeout=3)
+            if response.status_code == 200:
+                resultats = response.json().get("results", [])
+                if resultats:
+                    best_match = resultats[0]
+                    for res in resultats:
+                        siege = res.get("siege", {})
+                        cp = str(siege.get("code_postal", ""))
+                        if cp.startswith("06"):
+                            best_match = res
+                            break
+                    
+                    siren = best_match.get("siren", "N/A")
+                    dirigeants = best_match.get("dirigeants", [])
+                    nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
+                    
+                    siege = best_match.get("siege", {})
+                    adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
+                    
+                    if siren != "N/A":
+                        return {
+                            "siren": siren,
+                            "dirigeant": nom_dirigeant if nom_dirigeant else "Non renseigné",
+                            "siege": adresse_siege.strip(", ") if adresse_siege.strip(", ") else "Adresse non renseignée"
+                        }
+        except Exception:
+            pass
+            
     return {"siren": "N/A", "dirigeant": "N/A", "siege": "N/A"}
 
 # --- BARRE LATÉRALE DE RECHERCHE ---
@@ -64,9 +70,9 @@ st.sidebar.header("Filtres Investisseurs & Fiscalité")
 strategie = st.sidebar.selectbox(
     "Profil de ciblage",
     [
+        "Ciblage SCI / Sociétés (Enrichissement SIRENE)",
         "Fin de cycle Pinel / Ancienneté DPE (6 à 9 ans)",
-        "Ciblage Typologie Investisseur (Studios / 2 pièces)",
-        "SCI Immobilières Détenues en Local"
+        "Ciblage Typologie Investisseur (Studios / 2 pièces)"
     ]
 )
 
@@ -120,12 +126,9 @@ if lancer:
         df_resultats = df_global.copy()
         
         colonnes_utiles = {}
-        col_adresse = None
         if 'adresse_ban' in df_resultats.columns:
-            col_adresse = 'adresse_ban'
             colonnes_utiles['adresse_ban'] = 'Adresse Exacte'
         elif 'adresse_brute' in df_resultats.columns:
-            col_adresse = 'adresse_brute'
             colonnes_utiles['adresse_brute'] = 'Adresse Exacte'
             
         if 'code_postal_ban' in df_resultats.columns:
@@ -158,19 +161,6 @@ if lancer:
                 mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
                 df_affichage = df_affichage[mask_rue]
 
-        # Application des filtres patrimoniaux
-        if "Pinel" in strategie and 'Date DPE' in df_affichage.columns:
-            df_affichage['Année DPE'] = pd.to_datetime(df_affichage['Date DPE'], errors='coerce').dt.year
-            df_affichage = df_affichage[(df_affichage['Année DPE'] >= 2017) & (df_affichage['Année DPE'] <= 2020)]
-            df_affichage['Horizon Fiscal'] = "Fin de cycle Pinel / Amortissement"
-            
-        elif "Typologie" in strategie and 'Surface (m²)' in df_affichage.columns:
-            df_affichage = df_affichage[df_affichage['Surface (m²)'] <= 50]
-            df_affichage['Profil Investisseur'] = "Petite surface locative (Studio / 2P)"
-            
-        else:
-            df_affichage['Analyse Patrimoniale'] = "Portefeuille Global Investisseur"
-
         # Tri chronologique par date de DPE
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
@@ -180,21 +170,21 @@ if lancer:
         index_fin = index_debut + 50
         df_affichage = df_affichage.iloc[index_debut:index_fin]
 
-        # Option d'enrichissement SCI
-        if "SCI" in strategie or st.sidebar.checkbox("Activer l'enrichissement SCI (Sociétés)", value=False, key="sci_inv_box"):
-            st.info("🔄 Interrogation de l'API Sirene pour ce lot investisseurs...")
-            sirens, dirigeants, sieges = [], [], []
+        # Enrichissement automatique SCI / Sociétés
+        st.info("🔄 Interrogation approfondie de l'API Sirene pour ce lot de sociétés...")
+        sirens, dirigeants, sieges = [], [], []
+        
+        for idx, row in df_affichage.iterrows():
+            adresse = str(row.get('Adresse Exacte', ''))
+            terme_recherche = f"SCI {adresse}"
+            infos = chercher_infos_entreprise(terme_recherche, rue_secours=adresse)
+            sirens.append(infos['siren'])
+            dirigeants.append(infos['dirigeant'])
+            sieges.append(infos['siege'])
             
-            for idx, row in df_affichage.iterrows():
-                terme_recherche = f"SCI {row.get('Adresse Exacte', '')}"
-                infos = chercher_infos_entreprise(terme_recherche)
-                sirens.append(infos['siren'])
-                dirigeants.append(infos['dirigeant'])
-                sieges.append(infos['siege'])
-                
-            df_affichage['N° SIREN'] = sirens
-            df_affichage['Gérant / Mandataire'] = dirigeants
-            df_affichage['Siège Social'] = sieges
+        df_affichage['N° SIREN'] = sirens
+        df_affichage['Gérant / Mandataire'] = dirigeants
+        df_affichage['Siège Social'] = sieges
 
         st.success(f"✅ Analyse générée ({tranche_mois}) ! **{len(df_affichage)}** biens qualifiés pour : *{strategie}*.")
         st.dataframe(df_affichage, use_container_width=True)
