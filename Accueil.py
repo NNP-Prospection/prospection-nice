@@ -44,7 +44,7 @@ def chercher_infos_entreprise(terme_recherche):
                 dirigeants = best_match.get("dirigeants", [])
                 nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
                 
-                siege = best_match.get("siege", {})
+                siege = res.get("siege", {})
                 adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                 
                 return {
@@ -68,7 +68,6 @@ objectif = st.sidebar.selectbox(
     ]
 )
 
-# Filtre par secteur / quartier à Nice
 secteur = st.sidebar.selectbox(
     "Quartier / Secteur à Nice",
     [
@@ -82,16 +81,27 @@ secteur = st.sidebar.selectbox(
     ]
 )
 
+# Sélecteur de tranche mensuelle (Lot de 50)
+tranche_mois = st.sidebar.selectbox(
+    "Tranche / Lot de prospection (50 biens)",
+    [
+        "Lot 1 (1 - 50)",
+        "Lot 2 (51 - 100)",
+        "Lot 3 (101 - 150)",
+        "Lot 4 (151 - 200)",
+        "Lot 5 (201 - 250)"
+    ]
+)
+
 lancer = st.sidebar.button("Générer le listing certifié")
 
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
+        st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
-        # Sélection et renommage des colonnes utiles
         colonnes_utiles = {}
         col_adresse = None
         if 'adresse_ban' in df_resultats.columns:
@@ -118,7 +128,7 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Filtrage par quartier basé sur les rues de Nice (sans bloquer sur le code postal)
+        # Filtrage par quartier
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt", "dalpozzo", "grimaldi"],
@@ -128,48 +138,48 @@ if lancer:
                 "Musiciens / Gambetta": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo", "offenbach", "turenne"],
                 "Centre-ville": ["jean medecin", "gioffredo", "marechal foch", "pastorelli", "de chateauneuf", "assalit", "durandy"]
             }
-            
             mots_cles = rues_quartiers.get(secteur, [])
-            
             if 'Adresse Exacte' in df_affichage.columns and mots_cles:
                 pattern = '|'.join(mots_cles)
                 mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
                 df_affichage = df_affichage[mask_rue]
 
-        if "SCI" in objectif:
-            if len(df_affichage) > 50:
-                st.info("ℹ️ Pour des raisons de performance de l'API Sirene, l'enrichissement SCI est appliqué aux 50 premiers biens de cette sélection.")
-                df_to_enrich = df_affichage.head(50).copy()
-            else:
-                df_to_enrich = df_affichage.copy()
+        # Tri chronologique par date de DPE pour assurer le roulement des lots
+        if 'Date DPE' in df_affichage.columns:
+            df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
 
-            st.info("🔄 Interrogation de l'API Sirene en cours pour les sociétés...")
+        # Découpage par tranche de 50 selon le choix du mois
+        index_debut = (int(tranche_mois.split()[1]) - 1) * 50
+        index_fin = index_debut + 50
+        df_affichage = df_affichage.iloc[index_debut:index_fin]
+
+        if "SCI" in objectif:
+            st.info("🔄 Interrogation de l'API Sirene en cours pour ce lot de sociétés...")
             sirens, dirigeants, sieges = [], [], []
             
-            for idx, row in df_to_enrich.iterrows():
+            for idx, row in df_affichage.iterrows():
                 terme_recherche = f"SCI {row.get('Adresse Exacte', '')}"
                 infos = chercher_infos_entreprise(terme_recherche)
                 sirens.append(infos['siren'])
                 dirigeants.append(infos['dirigeant'])
                 sieges.append(infos['siege'])
                 
-            df_to_enrich['N° SIREN'] = sirens
-            df_to_enrich['Dirigeant / Gérant'] = dirigeants
-            df_to_enrich['Siège Social'] = sieges
-            df_affichage = df_to_enrich
+            df_affichage['N° SIREN'] = sirens
+            df_affichage['Dirigeant / Gérant'] = dirigeants
+            df_affichage['Siège Social'] = sieges
         else:
             df_affichage['Propriétaire / Statut'] = "Particulier (À croiser via DVF / Cadastre)"
             df_affichage['Action Recommandée'] = "Boîtage ciblé"
 
-        st.success(f"✅ Listing généré avec succès ! **{len(df_affichage)}** biens trouvés pour le secteur : *{secteur}*.")
+        st.success(f"✅ Listing généré ({tranche_mois}) ! **{len(df_affichage)}** biens affichés pour le secteur : *{secteur}*.")
         st.dataframe(df_affichage, use_container_width=True)
         
         csv = df_affichage.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Télécharger ce listing complet (CSV)",
+            label=f"📥 Télécharger ce {tranche_mois} (CSV)",
             data=csv,
-            file_name=f"listing_prospection_{secteur.lower().replace(' ', '_')}.csv",
+            file_name=f"listing_{secteur.lower().replace(' ', '_')}_{tranche_mois.lower().replace(' ', '_')}.csv",
             mime='text/csv',
         )
 else:
-    st.info("👉 Sélectionnez vos critères dans le menu à gauche et cliquez sur **'Générer le listing certifié'**.")
+    st.info("👉 Sélectionnez vos critères et votre tranche mensuelle dans le menu à gauche, puis cliquez sur **'Générer le listing certifié'**.")
