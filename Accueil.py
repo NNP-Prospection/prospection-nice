@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -44,7 +45,7 @@ def chercher_infos_entreprise(terme_recherche):
                 dirigeants = best_match.get("dirigeants", [])
                 nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
                 
-                siege = res.get("siege", {})
+                siege = best_match.get("siege", {})
                 adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                 
                 return {
@@ -81,17 +82,33 @@ secteur = st.sidebar.selectbox(
     ]
 )
 
-# Sélecteur de tranche mensuelle (Lot de 50)
-tranche_mois = st.sidebar.selectbox(
-    "Tranche / Lot de prospection (50 biens)",
-    [
-        "Lot 1 (1 - 50)",
-        "Lot 2 (51 - 100)",
-        "Lot 3 (101 - 150)",
-        "Lot 4 (151 - 200)",
-        "Lot 5 (201 - 250)"
-    ]
-)
+# Gestion automatique du mois / lot avec option de secours manuelle
+mois_actuel = datetime.now().month
+# Mappage automatique : Mois 10 (Octobre) = Lot 1, Mois 11 (Novembre) = Lot 2, etc.
+if mois_actuel <= 10:
+    lot_auto_index = 0 # Lot 1
+elif mois_actuel == 11:
+    lot_auto_index = 1 # Lot 2
+elif mois_actuel == 12:
+    lot_auto_index = 2 # Lot 3
+else:
+    lot_auto_index = 3 # Lot 4 et +
+
+liste_lots = [
+    "Lot 1 (1 - 50)",
+    "Lot 2 (51 - 100)",
+    "Lot 3 (101 - 150)",
+    "Lot 4 (151 - 200)",
+    "Lot 5 (201 - 250)"
+]
+
+mode_manuel = st.sidebar.checkbox("🔧 Activer le choix manuel du lot (secours)", value=False)
+
+if mode_manuel:
+    tranche_mois = st.sidebar.selectbox("Choisir le lot manuellement", liste_lots)
+else:
+    tranche_mois = liste_lots[min(lot_auto_index, len(liste_lots) - 1)]
+    st.sidebar.info(f"📅 Lot attribué automatiquement (Mois en cours) : **{tranche_mois}**")
 
 lancer = st.sidebar.button("Générer le listing certifié")
 
@@ -148,7 +165,7 @@ if lancer:
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
 
-        # Découpage par tranche de 50 selon le choix du mois
+        # Découpage par tranche de 50
         index_debut = (int(tranche_mois.split()[1]) - 1) * 50
         index_fin = index_debut + 50
         df_affichage = df_affichage.iloc[index_debut:index_fin]
@@ -182,4 +199,4 @@ if lancer:
             mime='text/csv',
         )
 else:
-    st.info("👉 Sélectionnez vos critères et votre tranche mensuelle dans le menu à gauche, puis cliquez sur **'Générer le listing certifié'**.")
+    st.info("👉 Sélectionnez vos critères dans le menu à gauche, puis cliquez sur **'Générer le listing certifié'**.")
