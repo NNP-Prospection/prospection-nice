@@ -44,7 +44,7 @@ def chercher_infos_entreprise(terme_recherche):
                 dirigeants = best_match.get("dirigeants", [])
                 nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
                 
-                siege = best_match.get("siege", {})
+                siege = res.get("siege", {})
                 adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                 
                 return {
@@ -69,7 +69,6 @@ strategie = st.sidebar.selectbox(
     ]
 )
 
-# Filtre par secteur / quartier à Nice
 secteur = st.sidebar.selectbox(
     "Quartier / Secteur à Nice",
     [
@@ -83,16 +82,27 @@ secteur = st.sidebar.selectbox(
     ]
 )
 
+# Sélecteur de tranche mensuelle (Lot de 50)
+tranche_mois = st.sidebar.selectbox(
+    "Tranche / Lot investisseurs (50 biens)",
+    [
+        "Lot 1 (1 - 50)",
+        "Lot 2 (51 - 100)",
+        "Lot 3 (101 - 150)",
+        "Lot 4 (151 - 200)",
+        "Lot 5 (201 - 250)"
+    ]
+)
+
 lancer = st.sidebar.button("Analyser le portefeuille investisseur")
 
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
+        st.error("⚠️️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
-        # Sélection et renommage des colonnes utiles
         colonnes_utiles = {}
         col_adresse = None
         if 'adresse_ban' in df_resultats.columns:
@@ -116,7 +126,7 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Filtrage par secteur si demandé
+        # Filtrage par secteur
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt", "dalpozzo", "grimaldi"],
@@ -132,53 +142,53 @@ if lancer:
                 mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
                 df_affichage = df_affichage[mask_rue]
 
-        # Application des filtres spécifiques selon la stratégie investisseur choisie
+        # Application des filtres patrimoniaux
         if "Pinel" in strategie and 'Date DPE' in df_affichage.columns:
-            # On cherche par exemple les DPE réalisés entre 2017 et 2020 (correspondant aux investissements de 6 à 9 ans arrivant à échéance)
             df_affichage['Année DPE'] = pd.to_datetime(df_affichage['Date DPE'], errors='coerce').dt.year
             df_affichage = df_affichage[(df_affichage['Année DPE'] >= 2017) & (df_affichage['Année DPE'] <= 2020)]
-            df_affichage['Horizon Fiscal'] = "Fin de cycle Pinel / Amortissement (Vente ou Réinvestissement potentiel)"
+            df_affichage['Horizon Fiscal'] = "Fin de cycle Pinel / Amortissement"
             
         elif "Typologie" in strategie and 'Surface (m²)' in df_affichage.columns:
-            # Typique investisseur : studios et petits 2 pièces (inférieur à 50 m²)
             df_affichage = df_affichage[df_affichage['Surface (m²)'] <= 50]
-            df_affichage['Profil Investisseur'] = "Petite surface locative (Cible type studio/2P)"
+            df_affichage['Profil Investisseur'] = "Petite surface locative (Studio / 2P)"
             
         else:
             df_affichage['Analyse Patrimoniale'] = "Portefeuille Global Investisseur"
 
-        # Option d'enrichissement SCI orientée investisseurs
-        if "SCI" in strategie or st.sidebar.checkbox("Activer l'enrichissement SCI (Sociétés)", value=False):
-            if len(df_affichage) > 30:
-                st.info("ℹ️ L'enrichissement SCI est appliqué aux 30 premiers biens pour optimiser la vitesse de l'API.")
-                df_to_enrich = df_affichage.head(30).copy()
-            else:
-                df_to_enrich = df_affichage.copy()
+        # Tri chronologique par date de DPE
+        if 'Date DPE' in df_affichage.columns:
+            df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
 
-            st.info("🔄 Interrogation de l'API Sirene pour identifier les structures...")
+        # Découpage par tranche de 50
+        index_debut = (int(tranche_mois.split()[1]) - 1) * 50
+        index_fin = index_debut + 50
+        df_affichage = df_affichage.iloc[index_debut:index_fin]
+
+        # Option d'enrichissement SCI
+        if "SCI" in strategie or st.sidebar.checkbox("Activer l'enrichissement SCI (Sociétés)", value=False):
+            st.info("🔄 Interrogation de l'API Sirene pour ce lot investisseurs...")
             sirens, dirigeants, sieges = [], [], []
             
-            for idx, row in df_to_enrich.iterrows():
+            for idx, row in df_affichage.iterrows():
                 terme_recherche = f"SCI {row.get('Adresse Exacte', '')}"
                 infos = chercher_infos_entreprise(terme_recherche)
                 sirens.append(infos['siren'])
                 dirigeants.append(infos['dirigeant'])
                 sieges.append(infos['siege'])
                 
-            df_to_enrich['N° SIREN'] = sirens
-            df_to_enrich['Gérant / Mandataire'] = dirigeants
-            df_to_enrich['Siège Social'] = sieges
-            df_affichage = df_to_enrich
+            df_affichage['N° SIREN'] = sirens
+            df_affichage['Gérant / Mandataire'] = dirigeants
+            df_affichage['Siège Social'] = sieges
 
-        st.success(f"✅ Analyse générée ! **{len(df_affichage)}** biens qualifiés pour la stratégie : *{strategie}*.")
+        st.success(f"✅ Analyse générée ({tranche_mois}) ! **{len(df_affichage)}** biens qualifiés pour : *{strategie}*.")
         st.dataframe(df_affichage, use_container_width=True)
         
         csv = df_affichage.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Télécharger le listing investisseurs (CSV)",
+            label=f"📥 Télécharger ce {tranche_mois} (CSV)",
             data=csv,
-            file_name=f"listing_investisseurs_{secteur.lower().replace(' ', '_')}.csv",
-            mime='text/css' if False else 'text/csv',
+            file_name=f"listing_investisseurs_{secteur.lower().replace(' ', '_')}_{tranche_mois.lower().replace(' ', '_')}.csv",
+            mime='text/csv',
         )
 else:
-    st.info("👉 Sélectionnez vos critères patrimoniaux dans le menu latéral et cliquez sur **'Analyser le portefeuille investisseur'**.")
+    st.info("👉 Sélectionnez vos critères et votre tranche mensuelle dans le menu latéral, puis cliquez sur **'Analyser le portefeuille investisseur'**.")
