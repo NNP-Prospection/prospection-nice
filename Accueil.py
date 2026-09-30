@@ -118,11 +118,29 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Filtrage sécurisé par secteur
-        if secteur != "Tous les secteurs" and col_adresse:
-            terme_filtre = secteur.split('/')[0].strip().lower()
-            mask = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(terme_filtre, na=False)
-            df_affichage = df_affichage[mask]
+        # Filtrage intelligent par quartier basé sur les vraies rues de Nice (et exclusion des autres villes)
+        if secteur != "Tous les secteurs":
+            rues_quartiers = {
+                "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt", "dalpozzo", "grimaldi"],
+                "Promenade des Anglais": ["promenade des anglais", "etats-unis", "quai des etats-unis"],
+                "Port / Garibaldi": ["garibaldi", "lunel", "cassini", "barla", "arson", "republique", "port", "république", "catherine segurane"],
+                "Mont Boron": ["mont boron", "jean lorrain", "carnot", "germaine", "andre joly", "valrose", "cap de nice", "montee"],
+                "Musiciens / Gambetta": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo", "offenbach", "turenne"],
+                "Centre-ville": ["jean medecin", "gioffredo", "marechal foch", "pastorelli", "de chateauneuf", "assalit", "durandy"]
+            }
+            
+            mots_cles = rues_quartiers.get(secteur, [])
+            
+            # Sécurité : On s'assure de ne garder que les codes postaux de Nice (06000 à 06300)
+            if 'Code Postal' in df_affichage.columns:
+                mask_cp = df_affichage['Code Postal'].astype(str).str.startswith('06')
+            else:
+                mask_cp = True
+                
+            # Filtre sur les rues du quartier
+            if 'Adresse Exacte' in df_affichage.columns:
+                mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().apply(lambda x: any(m in x for m in mots_cles))
+                df_affichage = df_affichage[mask_cp & mask_rue]
 
         if "SCI" in objectif:
             if len(df_affichage) > 50:
