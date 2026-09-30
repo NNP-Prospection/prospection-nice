@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -44,7 +45,7 @@ def chercher_infos_entreprise(terme_recherche):
                 dirigeants = best_match.get("dirigeants", [])
                 nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
                 
-                siege = res.get("siege", {})
+                siege = best_match.get("siege", {})
                 adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                 
                 return {
@@ -82,24 +83,39 @@ secteur = st.sidebar.selectbox(
     ]
 )
 
-# Sélecteur de tranche mensuelle (Lot de 50)
-tranche_mois = st.sidebar.selectbox(
-    "Tranche / Lot investisseurs (50 biens)",
-    [
-        "Lot 1 (1 - 50)",
-        "Lot 2 (51 - 100)",
-        "Lot 3 (101 - 150)",
-        "Lot 4 (151 - 200)",
-        "Lot 5 (201 - 250)"
-    ]
-)
+# Gestion automatique du mois / lot avec option de secours manuelle
+mois_actuel = datetime.now().month
+if mois_actuel <= 10:
+    lot_auto_index = 0
+elif mois_actuel == 11:
+    lot_auto_index = 1
+elif mois_actuel == 12:
+    lot_auto_index = 2
+else:
+    lot_auto_index = 3
+
+liste_lots = [
+    "Lot 1 (1 - 50)",
+    "Lot 2 (51 - 100)",
+    "Lot 3 (101 - 150)",
+    "Lot 4 (151 - 200)",
+    "Lot 5 (201 - 250)"
+]
+
+mode_manuel = st.sidebar.checkbox("🔧 Activer le choix manuel du lot (secours)", value=False, key="manuel_inv")
+
+if mode_manuel:
+    tranche_mois = st.sidebar.selectbox("Choisir le lot investisseur manuellement", liste_lots, key="select_inv")
+else:
+    tranche_mois = liste_lots[min(lot_auto_index, len(liste_lots) - 1)]
+    st.sidebar.info(f"📅 Lot investisseur attribué (Mois en cours) : **{tranche_mois}**")
 
 lancer = st.sidebar.button("Analyser le portefeuille investisseur")
 
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
+        st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
@@ -165,7 +181,7 @@ if lancer:
         df_affichage = df_affichage.iloc[index_debut:index_fin]
 
         # Option d'enrichissement SCI
-        if "SCI" in strategie or st.sidebar.checkbox("Activer l'enrichissement SCI (Sociétés)", value=False):
+        if "SCI" in strategie or st.sidebar.checkbox("Activer l'enrichissement SCI (Sociétés)", value=False, key="sci_inv_box"):
             st.info("🔄 Interrogation de l'API Sirene pour ce lot investisseurs...")
             sirens, dirigeants, sieges = [], [], []
             
@@ -191,4 +207,4 @@ if lancer:
             mime='text/csv',
         )
 else:
-    st.info("👉 Sélectionnez vos critères et votre tranche mensuelle dans le menu latéral, puis cliquez sur **'Analyser le portefeuille investisseur'**.")
+    st.info("👉 Sélectionnez vos critères dans le menu latéral, puis cliquez sur **'Analyser le portefeuille investisseur'**.")
