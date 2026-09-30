@@ -87,7 +87,7 @@ lancer = st.sidebar.button("Générer le listing certifié")
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
+        st.error("⚠️️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
@@ -118,7 +118,7 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Filtrage ultra-robuste par quartier basé sur les vraies rues de Nice
+        # Filtrage par quartier basé sur les rues de Nice (sans bloquer sur le code postal)
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt", "dalpozzo", "grimaldi"],
@@ -131,17 +131,10 @@ if lancer:
             
             mots_cles = rues_quartiers.get(secteur, [])
             
-            # Sécurité code postal Nice (06000 à 06300)
-            if 'Code Postal' in df_affichage.columns:
-                mask_cp = df_affichage['Code Postal'].astype(str).str.startswith('06')
-            else:
-                mask_cp = True
-                
-            # Filtre propre avec regex Pandas (sans fonction lambda instable)
             if 'Adresse Exacte' in df_affichage.columns and mots_cles:
                 pattern = '|'.join(mots_cles)
                 mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
-                df_affichage = df_affichage[mask_cp & mask_rue]
+                df_affichage = df_affichage[mask_rue]
 
         if "SCI" in objectif:
             if len(df_affichage) > 50:
