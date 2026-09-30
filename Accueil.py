@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import requests
 from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
@@ -20,44 +19,6 @@ except Exception as e:
     df_global = pd.DataFrame()
     st.error(f"Erreur critique lors du chargement du fichier CSV : {e}")
 
-# --- FONCTION D'ENRICHISSEMENT DES SOCIÉTÉS / SCI ---
-def chercher_infos_entreprise(terme_recherche):
-    if not terme_recherche or str(terme_recherche).lower() == "nan":
-        return {"siren": "N/A", "dirigeant": "N/A", "siege": "N/A"}
-        
-    url = "https://recherche-entreprises.api.gouv.fr/search"
-    params = {"q": terme_recherche, "per_page": 3}
-    
-    try:
-        response = requests.get(url, params=params, timeout=3)
-        if response.status_code == 200:
-            resultats = response.json().get("results", [])
-            if resultats:
-                best_match = resultats[0]
-                for res in resultats:
-                    siege = res.get("siege", {})
-                    cp = str(siege.get("code_postal", ""))
-                    if cp.startswith("06"):
-                        best_match = res
-                        break
-                
-                siren = best_match.get("siren", "N/A")
-                dirigeants = best_match.get("dirigeants", [])
-                nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
-                
-                siege = best_match.get("siege", {})
-                adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
-                
-                return {
-                    "siren": siren,
-                    "dirigeant": nom_dirigeant if nom_dirigeant else "Non renseigné",
-                    "siege": adresse_siege.strip(", ") if adresse_siege.strip(", ") else "Adresse non renseignée"
-                }
-    except Exception:
-        pass
-        
-    return {"siren": "N/A", "dirigeant": "N/A", "siege": "N/A"}
-
 # --- BARRE LATÉRALE DE RECHERCHE ---
 st.sidebar.header("Critères de ciblage")
 
@@ -65,7 +26,7 @@ objectif = st.sidebar.selectbox(
     "Objectif de prospection",
     [
         "Passoires Énergétiques (F & G) - Standard",
-        "Ciblage SCI / Sociétés (Enrichissement SIRENE)"
+        "Campagne de Boîtage Ciblé"
     ]
 )
 
@@ -84,15 +45,14 @@ secteur = st.sidebar.selectbox(
 
 # Gestion automatique du mois / lot avec option de secours manuelle
 mois_actuel = datetime.now().month
-# Mappage automatique : Mois 10 (Octobre) = Lot 1, Mois 11 (Novembre) = Lot 2, etc.
 if mois_actuel <= 10:
-    lot_auto_index = 0 # Lot 1
+    lot_auto_index = 0
 elif mois_actuel == 11:
-    lot_auto_index = 1 # Lot 2
+    lot_auto_index = 1
 elif mois_actuel == 12:
-    lot_auto_index = 2 # Lot 3
+    lot_auto_index = 2
 else:
-    lot_auto_index = 3 # Lot 4 et +
+    lot_auto_index = 3
 
 liste_lots = [
     "Lot 1 (1 - 50)",
@@ -120,12 +80,9 @@ if lancer:
         df_resultats = df_global.copy()
         
         colonnes_utiles = {}
-        col_adresse = None
         if 'adresse_ban' in df_resultats.columns:
-            col_adresse = 'adresse_ban'
             colonnes_utiles['adresse_ban'] = 'Adresse Exacte'
         elif 'adresse_brute' in df_resultats.columns:
-            col_adresse = 'adresse_brute'
             colonnes_utiles['adresse_brute'] = 'Adresse Exacte'
             
         if 'code_postal_ban' in df_resultats.columns:
@@ -161,7 +118,7 @@ if lancer:
                 mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
                 df_affichage = df_affichage[mask_rue]
 
-        # Tri chronologique par date de DPE pour assurer le roulement des lots
+        # Tri chronologique par date de DPE
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
 
@@ -170,23 +127,9 @@ if lancer:
         index_fin = index_debut + 50
         df_affichage = df_affichage.iloc[index_debut:index_fin]
 
-        if "SCI" in objectif:
-            st.info("🔄 Interrogation de l'API Sirene en cours pour ce lot de sociétés...")
-            sirens, dirigeants, sieges = [], [], []
-            
-            for idx, row in df_affichage.iterrows():
-                terme_recherche = f"SCI {row.get('Adresse Exacte', '')}"
-                infos = chercher_infos_entreprise(terme_recherche)
-                sirens.append(infos['siren'])
-                dirigeants.append(infos['dirigeant'])
-                sieges.append(infos['siege'])
-                
-            df_affichage['N° SIREN'] = sirens
-            df_affichage['Dirigeant / Gérant'] = dirigeants
-            df_affichage['Siège Social'] = sieges
-        else:
-            df_affichage['Propriétaire / Statut'] = "Particulier (À croiser via DVF / Cadastre)"
-            df_affichage['Action Recommandée'] = "Boîtage ciblé"
+        # Colonnes de qualification pour la prospection terrain
+        df_affichage['Propriétaire / Statut'] = "Particulier (Croisement DVF / Cadastre conseillé)"
+        df_affichage['Action Recommandée'] = "Boîtage ciblé / Courrier personnalisé"
 
         st.success(f"✅ Listing généré ({tranche_mois}) ! **{len(df_affichage)}** biens affichés pour le secteur : *{secteur}*.")
         st.dataframe(df_affichage, use_container_width=True)
