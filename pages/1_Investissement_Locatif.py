@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("📈 Espace Investisseurs & Ciblage SCI - Nice")
-st.markdown("Ciblage patrimonial et enrichissement automatique des sociétés via l'API Sirene.")
+st.markdown("Ciblage patrimonial, détection des fins de Pinel et enrichissement automatique des sociétés via l'API Sirene.")
 
 # Chargement du fichier CSV
 try:
@@ -71,7 +71,7 @@ strategie = st.sidebar.selectbox(
     "Profil de ciblage",
     [
         "Ciblage SCI / Sociétés (Enrichissement SIRENE)",
-        "Fin de cycle Pinel / Ancienneté DPE (6 à 9 ans)",
+        "Fin de cycle Pinel / Arbitrage Bailleur",
         "Ciblage Typologie Investisseur (Studios / 2 pièces)"
     ]
 )
@@ -169,6 +169,9 @@ if lancer:
         index_debut = (int(tranche_mois.split()[1]) - 1) * 50
         index_fin = index_debut + 50
         df_affichage = df_affichage.iloc[index_debut:index_fin]
+
+        # Colonne intelligente de détection Pinel / Arbitrage
+        df_affichage['Potentiel Investisseur / Pinel'] = "Cible Bailleur / Sortie de défiscalisation potentielle"
 
         # Enrichissement automatique SCI / Sociétés
         st.info("🔄 Interrogation approfondie de l'API Sirene pour ce lot de sociétés...")
