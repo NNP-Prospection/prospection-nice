@@ -118,7 +118,7 @@ if lancer:
         else:
             df_affichage = df_resultats 
 
-        # Filtrage intelligent par quartier basé sur les vraies rues de Nice (et exclusion des autres villes)
+        # Filtrage ultra-robuste par quartier basé sur les vraies rues de Nice
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt", "dalpozzo", "grimaldi"],
@@ -131,15 +131,16 @@ if lancer:
             
             mots_cles = rues_quartiers.get(secteur, [])
             
-            # Sécurité : On s'assure de ne garder que les codes postaux de Nice (06000 à 06300)
+            # Sécurité code postal Nice (06000 à 06300)
             if 'Code Postal' in df_affichage.columns:
                 mask_cp = df_affichage['Code Postal'].astype(str).str.startswith('06')
             else:
                 mask_cp = True
                 
-            # Filtre sur les rues du quartier
-            if 'Adresse Exacte' in df_affichage.columns:
-                mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().apply(lambda x: any(m in x for m in mots_cles))
+            # Filtre propre avec regex Pandas (sans fonction lambda instable)
+            if 'Adresse Exacte' in df_affichage.columns and mots_cles:
+                pattern = '|'.join(mots_cles)
+                mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
                 df_affichage = df_affichage[mask_cp & mask_rue]
 
         if "SCI" in objectif:
