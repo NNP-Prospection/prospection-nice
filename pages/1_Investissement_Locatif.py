@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("📈 Espace Investisseurs, SCI & Veille Juridique LMNP/Pinel")
-st.markdown("Ciblage patrimonial, enrichissement automatique des sociétés et veille juridique officielle pour vos arguments de vente.")
+st.markdown("Ciblage patrimonial, enrichissement automatique des sociétés et veille juridique multi-niveaux pour vos arguments de vente.")
 
 # Chargement du fichier CSV
 try:
@@ -47,7 +47,7 @@ def chercher_infos_entreprise(terme_recherche, rue_secours=""):
                     siren = best_match.get("siren", "N/A")
                     dirigeants = best_match.get("dirigeants", [])
                     nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
-                    siege = res.get("siege", {})
+                    siege = best_match.get("siege", {})
                     adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
                     if siren != "N/A":
                         return {
@@ -68,7 +68,7 @@ strategie = st.sidebar.selectbox(
         "Ciblage SCI / Sociétés (Enrichissement SIRENE)",
         "Fin de cycle Pinel / Arbitrage Bailleur",
         "Ciblage Typologie Investisseur (Studios / 2 pièces)",
-        "🚨 Veille & Textes Officiels LMNP/Pinel"
+        "🚨 Hub de Veille Juridique (Niveaux d'Alerte)"
     ]
 )
 
@@ -116,34 +116,43 @@ lancer = st.sidebar.button("Analyser le portefeuille investisseur")
 
 # --- CORPS DE LA PAGE ---
 
-if strategie == "🚨 Veille & Textes Officiels LMNP/Pinel":
-    st.header("⚖️ Hub de Veille Juridique & Textes Officiels (LMNP / Pinel)")
+if strategie == "🚨 Hub de Veille Juridique (Niveaux d'Alerte)":
+    st.header("⚖️ Hub de Veille Juridique & Stratégie Immobilière")
     st.markdown("""
-    Cet espace centralise les points de vigilance réglementaire et fiscale pour sécuriser vos argumentaires auprès des propriétaires bailleurs.
+    Cette section segmente l'actualité fiscale et réglementaire selon son degré de validation juridique, 
+    vous permettant d'adapter précisément votre discours commercial sur le terrain.
     """)
     
-    col1, col2 = st.columns(2)
+    # Niveau 1 : Projets / En discussion
+    st.markdown("---")
+    st.subheader("🟡 Niveau 1 : ⚠️ PROJET / EN DISCUSSION (Anticipation & Conseil Patrimonial)")
+    st.info("""
+    **Sujet : Évolutions du régime LMNP et de la fiscalité des amortissements**
+    * **État actuel du texte :** En cours de discussion et d'amendements (Projet de loi de finances). **Non voté, non applicable à ce jour.**
+    * **Impact potentiel :** Remise en cause potentielle du calcul des amortissements ou réintégration dans les plus-values.
+    * **Argument de prospection (Posture conseil) :** *"Anticiper l'évolution fiscale avant la promulgation définitive permet d'étudier un arbitrage dans de bonnes conditions et de sécuriser votre prix net vendeur."*
+    """)
     
-    with col1:
-        st.subheader("💡 Option 1 : Argumentaire & Synthèse Terrain")
-        st.info("""
-        **LMNP & Loi de finances :**
-        * **Le problème fiscal :** La requalification du régime des amortissements et leur réintégration dans le calcul de la plus-value des loueurs en meublé non professionnels réduisent drastiquement la rentabilité nette à la revente.
-        * **L'argument clé pour décrocher le mandat :** *"Anticiper la sortie avant la décote de valeur liée aux contraintes énergétiques et aux évolutions de fiscalité des meublés permet de sécuriser votre capital net vendeur."*
-        
-        **Fin de cycle Pinel :**
-        * **La fenêtre de tir :** Les biens achetés il y a 6 ou 9 ans arrivent au terme de leur engagement de location. Les propriétaires récupèrent la liberté de vendre sans pénalité de restitution d'impôt.
+    # Niveau 2 : Textes votés / Applicables
+    fn_col1, fn_col2 = st.columns(2)
+    with fn_col1:
+        st.markdown("---")
+        st.subheader("🟢 Niveau 2 : ✅ TEXTE VOTÉ / APPLICABLE (Obligation légale)")
+        st.success("""
+        **Sujet : Interdiction de mise en location des passoires énergétiques (Loi Climat & Résilience)**
+        * **État actuel du texte :** **Voté et en vigueur.**
+        * **Impact concret :** Gel progressif des loyers puis interdiction de louer les classes F et G.
+        * **Argument de prospection (Urgence terrain) :** *"Votre bien classé en F/G est frappé par les restrictions légales de location. Plutôt que de financer des travaux lourds, l'arbitrage immédiat sécurise votre capital."*
         """)
         
-    with col2:
-        st.subheader("🔗 Option 2 : Accès direct aux Flux & Textes Officiels")
+    with fn_col2:
+        st.markdown("---")
+        st.subheader("🔗 Accès aux Sources Officielles")
         st.markdown("""
-        Pour consulter les textes en vigueur sans risque d'erreur, référez-vous directement aux sources institutionnelles de référence :
-        * 🏛️ [Legifrance - Code Général des Impôts (CGI)](https://www.legifrance.gouv.fr)
-        * 📊 [Service-Public.fr - Dispositif Pinel / Location Meublée](https://www.service-public.fr)
-        * 📑 [Assemblée Nationale - Dossiers Législatifs (Projet de Loi de Finances)](https://www.assemblee-nationale.fr)
-        
-        *Conseil de pro : Gardez ces liens ouvrez sur votre tablette lors de vos rendez-vous physiques pour appuyer vos dires sur des bases juridiques irréfutables.*
+        Pour vérifier l'état exact des textes en direct :
+        * 🏛️ [Legifrance (Code Général des Impôts)](https://www.legifrance.gouv.fr)
+        * 📊 [Service-Public.fr (Immobilier & Fiscalité)](https://www.service-public.fr)
+        * 📑 [Assemblée Nationale (Dossiers Législatifs)](https://www.assemblee-nationale.fr)
         """)
 
 else:
