@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Passoires énergétiques, résidences secondaires et publipostage intelligent.")
+st.markdown("Base de données certifiée : Repères de copropriété, résidences secondaires et publipostage.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -18,7 +18,7 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
-# Chargement du fichier CSV
+# Chargement du fichier CSV global
 try:
     df_global = pd.read_csv('dpe_nice_fg.csv')
 except Exception as e:
@@ -46,15 +46,34 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
-        # Renommage des colonnes
+        # Mappage large pour récupérer TOUS les repères d'identification du bien
         colonnes_utiles = {}
-        if 'adresse_ban' in df_resultats.columns: colonnes_utiles['adresse_ban'] = 'Adresse Exacte'
-        elif 'adresse_brute' in df_resultats.columns: colonnes_utiles['adresse_brute'] = 'Adresse Exacte'
+        
+        # Adresses et codes postaux
+        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
+            if col in df_resultats.columns: colonnes_utiles[col] = 'Adresse Exacte'
+        for col in ['code_postal_ban', 'code_postal']:
+            if col in df_resultats.columns: colonnes_utiles[col] = 'Code Postal'
             
-        for col, nom in [('etiquette_dpe', 'Note DPE'), ('date_etablissement_dpe', 'Date DPE'), ('nom_proprietaire', 'Propriétaire')]:
-            if col in df_resultats.columns: colonnes_utiles[col] = nom
+        # Repères de copropriété essentiels pour le boîtage
+        for col, nom in [
+            ('numero_appartement', 'N° Apt'),
+            ('numero_lot', 'N° Lot'),
+            ('batiment', 'Bâtiment'),
+            ('escalier', 'Escalier'),
+            ('etage', 'Étage'),
+            ('surface_habitable_logement', 'Surface (m²)'),
+            ('etiquette_dpe', 'Note DPE'),
+            ('date_etablissement_dpe', 'Date DPE'),
+            ('nom_proprietaire', 'Propriétaire / SCI'),
+            ('raison_sociale', 'Propriétaire / SCI')
+        ]:
+            if col in df_resultats.columns:
+                colonnes_utiles[col] = nom
 
-        df_affichage = df_resultats[list(colonnes_utiles.keys())].rename(columns=colonnes_utiles) if colonnes_utiles else df_resultats 
+        # Application du renommage sur les colonnes présentes
+        colonnes_finales_presentes = {k: v for k, v in colonnes_utiles.items() if k in df_resultats.columns}
+        df_affichage = df_resultats[list(colonnes_finales_presentes.keys())].rename(columns=colonnes_finales_presentes)
 
         # Filtrage par quartier
         if secteur != "Tous les secteurs":
@@ -71,7 +90,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse des profils et détection des résidences secondaires
+        # Analyse des profils et repérage géographique des résidences secondaires
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -109,17 +128,16 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
 if st.session_state.analyse_terminee:
     
     tab1, tab2, tab3 = st.tabs([
-        "📊 1. Passoires F&G & Mandats Mûrs", 
+        "📊 1. Base & Repères Copropriété", 
         "🏖️ 2. Résidences Secondaires (~5 ans)", 
-        "✉️ 3. Publipostage Intelligent & Impression"
+        "✉️ 3. Publipostage & Impression"
     ])
     
-    # ONGLET 1 : BASE GLOBALE AVEC SÉLECTION MULTIPLE
+    # ONGLET 1 : BASE GLOBALE AVEC REPÈRES COMPLETS ET SÉLECTION
     with tab1:
-        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés pour le secteur : *{secteur}*.")
-        st.write("💡 *Astuce : Vous pouvez cliquer sur les lignes du tableau pour les sélectionner.*")
+        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères pour le secteur : *{secteur}*.")
+        st.info("💡 *Le tableau affiche désormais les numéros de lots, d'appartements, d'étages et les noms de SCI lorsqu'ils sont renseignés.*")
         
-        # Tableau interactif avec sélection de lignes
         event_selection = st.dataframe(
             st.session_state.df_affichage, 
             use_container_width=True,
@@ -128,12 +146,12 @@ if st.session_state.analyse_terminee:
             key="table_passoires"
         )
         
-        st.download_button("📥 Télécharger ce lot global (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_global.csv", mime='text/csv')
+        st.download_button("📥 Télécharger ce lot complet (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_copropriete.csv", mime='text/csv')
 
     # ONGLET 2 : RÉSIDENCES SECONDAIRES
     with tab2:
         st.header("🏖️ Ciblage Résidences Secondaires & Turnover (5 ans)")
-        st.write("Cet onglet isole les biens situés sur les secteurs à forte concentration de résidences secondaires.")
+        st.write("Biens localisés sur les grands axes de villégiature niçoise.")
         
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_sec = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Résidence Secondaire", na=False)]
@@ -141,29 +159,27 @@ if st.session_state.analyse_terminee:
             if df_sec.empty:
                 st.info("ℹ️ Aucun bien ne correspond aux critères de résidence secondaire dans ce lot.")
             else:
-                st.success(f"🎯 **{len(df_sec)} biens** identifiés en zone de résidence secondaire.")
+                st.success(f"🎯 **{len(df_sec)} biens** identifiés.")
                 st.dataframe(df_sec, use_container_width=True)
                 csv_sec = df_sec.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Télécharger le listing 'Résidences Secondaires' (CSV)", data=csv_sec, file_name="listing_residences_secondaires.csv", mime='text/csv')
+                st.download_button("📥 Télécharger le listing (CSV)", data=csv_sec, file_name="listing_residences_secondaires.csv", mime='text/csv')
         else:
             st.warning("Données de profil non disponibles.")
 
-    # ONGLET 3 : GÉNÉRATEUR INTELLIGENT ET BOUTON IMPRIMANTE
+    # ONGLET 3 : IMPRESSION ET COURRIERS
     with tab3:
         st.header("✉️ Publipostage Intelligent & Impression")
-        st.write("Sélectionnez vos adresses ci-dessous (ou l'application récupère automatiquement vos lignes cochées dans l'onglet 1) pour générer les courriers prêts à imprimer.")
+        st.write("Générez vos courriers personnalisés avec les informations de lot, d'étage et de structure juridique.")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
             
-            # Récupération automatique des lignes cochées dans le tableau de l'onglet 1 si l'utilisateur en a sélectionné
             lignes_selectionnees_indices = []
             if event_selection and 'selection' in event_selection:
                 lignes_selectionnees_indices = event_selection['selection'].get('rows', [])
             
             adresses_par_defaut = [liste_adresses[i] for i in lignes_selectionnees_indices if i < len(liste_adresses)]
             
-            # Multiselect synchronisé
             adresses_selectionnees = st.multiselect(
                 "📍 Adresses sélectionnées pour le courrier :", 
                 liste_adresses, 
@@ -175,12 +191,8 @@ if st.session_state.analyse_terminee:
             else:
                 date_jour = datetime.now().strftime("%d/%m/%Y")
                 
-                # BOUTON D'IMPRESSION GLOBAL
-                col_btn1, col_btn2 = st.columns([1, 4])
-                with col_btn1:
-                    if st.button("🖨️ Imprimer la sélection", type="primary"):
-                        st.balloons()
-                        st.success("📄 Vos courriers sont prêts ! Utilisez le raccourci de votre navigateur (`Ctrl + P` ou `Cmd + P`) pour imprimer.")
+                if st.button("🖨️ Préparer l'impression groupée", type="primary"):
+                    st.success("📄 Courriers prêts pour l'impression (utilisez Ctrl+P / Cmd+P).")
 
                 st.markdown("---")
                 
@@ -188,40 +200,54 @@ if st.session_state.analyse_terminee:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Stratégie', '')
                     
+                    # Récupération propre des repères s'ils existent dans la ligne
+                    proprietaire = ligne_bien.get('Propriétaire / SCI', 'Propriétaire')
+                    apt = ligne_bien.get('N° Apt', '')
+                    lot = ligne_bien.get('N° Lot', '')
+                    etage = ligne_bien.get('Étage', '')
+                    bat = ligne_bien.get('Bâtiment', '')
+                    
+                    # Constitution d'une mention de repérage pour l'en-tête du courrier
+                    infos_repere = []
+                    if bat: infos_repere.append(f"Bât. {bat}")
+                    if etage: infos_repere.append(f"Étage : {etage}")
+                    if apt: infos_repere.append(f"Apt {apt}")
+                    if lot: infos_repere.append(f"Lot n° {lot}")
+                    str_reperage = " | ".join(infos_repere) if infos_repere else "Bien identifié"
+
                     est_sci = False
-                    if 'Propriétaire' in ligne_bien.index and isinstance(ligne_bien['Propriétaire'], str):
-                        if "SCI" in ligne_bien['Propriétaire'].upper():
-                            est_sci = True
+                    if isinstance(proprietaire, str) and ("SCI" in proprietaire.upper() or "SARL" in proprietaire.upper() or "SAS" in proprietaire.upper()):
+                        est_sci = True
                             
                     # Attribution automatique du Courrier
                     if est_sci:
-                        type_courrier = "🏢 Courrier 4 : Investisseur / SCI (Anticipation LMNP/PLF)"
+                        type_courrier = f"🏢 Courrier 4 : Investisseur / SCI ({proprietaire})"
                         sujet = f"Anticipation fiscale et arbitrage de votre actif au {adresse}"
-                        corps = f"En qualité de professionnel intervenant sur la gestion patrimoniale à Nice, je m'adresse à vous concernant l'actif détenu au {adresse}.\n\nDans le cadre des révisions liées au Projet de Loi de Finances, des évolutions sont à l'étude (LMNP, SCI). Anticiper l'adoption de ces mesures est essentiel pour sécuriser la rentabilité nette de votre investissement."
+                        corps = f"À l'attention de la société {proprietaire},\n\nConcernant l'actif détenu au {adresse} ({str_reperage}), dans le cadre des révisions liées au Projet de Finances (LMNP/SCI), anticiper l'évolution des amortissements est essentiel pour sécuriser la valeur de votre investissement."
                     
                     elif "Résidence Secondaire" in profil:
                         type_courrier = "🏖️ Courrier Résidence Secondaire (~Cycle 5 ans)"
                         sujet = f"Évolution du marché niçois et valorisation de votre pied-à-terre au {adresse}"
-                        corps = f"Vous êtes propriétaire d'un bien immobilier dans cette résidence depuis environ cinq ans. Sur le marché niçois, cette durée de détention correspond souvent à un cap de réflexion : évolution des projets personnels, fin d'un cycle d'investissement, ou arbitrage patrimonial.\n\nEn tant que spécialiste de votre secteur, je réalise actuellement des audits de positionnement pour plusieurs propriétaires du quartier souhaitant faire un point d'étape."
+                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}),\n\nPropriétaire de ce pied-à-terre depuis environ cinq ans, ce cap correspond souvent sur Nice à une réflexion sur l'arbitrage ou la valorisation patrimoniale avant d'entamer de nouveaux cycles de gestion."
                     
                     elif "Mandat Mûr" in profil:
                         type_courrier = "🎯 Courrier 3 : Mandat Mûr (Reconquête / DPE 3-6 mois)"
                         sujet = f"Stratégie de vente et positionnement de votre bien au {adresse}"
-                        corps = f"En analysant les données techniques de votre secteur, j'ai noté qu'un Diagnostic de Performance Énergétique a été réalisé pour votre bien situé au {adresse} il y a quelques mois.\n\nSi votre bien est actuellement sur le marché et ne trouve pas preneur, sachez que les acquéreurs sont exigeants. Les caractéristiques énergétiques fragilisent le prix net vendeur si elles ne sont pas défendues par des arguments techniques solides."
+                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}),\n\nEn analysant votre secteur, un DPE a été réalisé il y a quelques mois pour ce bien. Si la commercialisation stagne, c'est que les critères énergétiques exigent une défense technique irréprochable."
                     
                     else:
                         type_courrier = "⏳ Courrier Passoire F/G Standard"
                         sujet = f"Impact réglementaire et optimisation de votre bien au {adresse}"
-                        corps = f"Propriétaire d'un bien au sein de cette copropriété, je me permets de vous contacter car l'évolution récente du cadre légal (Loi Climat et Résilience) impose de nouvelles contraintes lourdes sur les biens énergivores (gel des loyers, interdiction de louer).\n\nCéder ce bien en l'état ou anticiper sa valorisation vous permet de vous libérer de ces contraintes techniques."
+                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}, {str_reperage}),\n\nL'évolution de la Loi Climat impose des contraintes lourdes sur ce bien énergivore. Anticiper sa cession en l'état vous permet de purger votre plus-value sans subir les coûts de rénovation de copropriété."
                     
                     st.markdown(f"### 📍 {adresse}")
-                    st.markdown(f"**Stratégie appliquée :** `{type_courrier}`")
+                    st.markdown(f"**Repères :** `{str_reperage}` | **Cible :** `{type_courrier}`")
                     st.text_area(
-                        f"📄 Modèle de courrier prêt à imprimer :", 
-                        value=f"Nice, le {date_jour}\n\nObjet : {sujet}\n\nMadame, Monsieur,\n\n{corps}\n\nBien cordialement,\n\nNathalie Parra\n[Votre Agence / Coordonnées]", 
-                        height=260,
+                        f"📄 Courrier publiposté :", 
+                        value=f"Nice, le {date_jour}\n\nObjet : {sujet}\n\n{corps}\n\nBien cordialement,\n\nNathalie Parra\n[Votre Agence / Coordonnées]", 
+                        height=240,
                         key=f"courrier_{adresse}"
                     )
                     st.markdown("---")
 else:
-    st.info("👉 Sélectionnez vos critères dans le menu à gauche, puis cliquez sur **'Générer le listing certifié'**.")
+    st.info("👉 Sélectionnez vos critères à gauche, puis cliquez sur **'Générer le listing certifié'**.")
