@@ -71,7 +71,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse des profils et détection des résidences secondaires (secteurs ciblés)
+        # Analyse des profils et détection des résidences secondaires
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -80,8 +80,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
             for index, row in df_affichage.iterrows():
                 d = row['Date DPE']
                 adresse_str = str(row.get('Adresse Exacte', '')).lower()
-                
-                # Détection indicielle résidence secondaire (Promenade des Anglais, Mont Boron, Carré d'Or)
                 est_residence_secondaire = any(k in adresse_str for k in ["promenade des anglais", "mont boron", "quai", "france", "massena", "paradis"])
                 
                 try:
@@ -113,47 +111,78 @@ if st.session_state.analyse_terminee:
     tab1, tab2, tab3 = st.tabs([
         "📊 1. Passoires F&G & Mandats Mûrs", 
         "🏖️ 2. Résidences Secondaires (~5 ans)", 
-        "✉️ 3. Publipostage Intelligent"
+        "✉️ 3. Publipostage Intelligent & Impression"
     ])
     
-    # ONGLET 1 : BASE GLOBALE
+    # ONGLET 1 : BASE GLOBALE AVEC SÉLECTION MULTIPLE
     with tab1:
         st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés pour le secteur : *{secteur}*.")
-        st.dataframe(st.session_state.df_affichage, use_container_width=True)
+        st.write("💡 *Astuce : Vous pouvez cliquer sur les lignes du tableau pour les sélectionner.*")
+        
+        # Tableau interactif avec sélection de lignes
+        event_selection = st.dataframe(
+            st.session_state.df_affichage, 
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="multi-row",
+            key="table_passoires"
+        )
+        
         st.download_button("📥 Télécharger ce lot global (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_global.csv", mime='text/csv')
 
-    # ONGLET 2 : RÉSIDENCES SECONDAIRES & CYCLES DE 5 ANS
+    # ONGLET 2 : RÉSIDENCES SECONDAIRES
     with tab2:
         st.header("🏖️ Ciblage Résidences Secondaires & Turnover (5 ans)")
-        st.write("Cet onglet isole les biens situés sur les secteurs à forte concentration de résidences secondaires (Promenade, Mont Boron, Carré d'Or) pour actionner l'approche patrimoniale et le cycle d'arbitrage.")
+        st.write("Cet onglet isole les biens situés sur les secteurs à forte concentration de résidences secondaires.")
         
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_sec = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Résidence Secondaire", na=False)]
             
             if df_sec.empty:
-                st.info("ℹ️ Aucun bien ne correspond aux critères de résidence secondaire dans ce lot. Élargissez le secteur ou changez de lot.")
+                st.info("ℹ️ Aucun bien ne correspond aux critères de résidence secondaire dans ce lot.")
             else:
                 st.success(f"🎯 **{len(df_sec)} biens** identifiés en zone de résidence secondaire.")
                 st.dataframe(df_sec, use_container_width=True)
-                
                 csv_sec = df_sec.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Télécharger le listing 'Résidences Secondaires' (CSV)", data=csv_sec, file_name="listing_residences_secondaires.csv", mime='text/csv')
         else:
             st.warning("Données de profil non disponibles.")
 
-    # ONGLET 3 : LE GÉNÉRATEUR DE COURRIERS EN LOT
+    # ONGLET 3 : GÉNÉRATEUR INTELLIGENT ET BOUTON IMPRIMANTE
     with tab3:
-        st.header("✉️ Générateur Automatique de Courriers en Lot")
-        st.write("Sélectionnez plusieurs adresses : l'application détecte le profil et rédige instantanément le courrier adapté.")
+        st.header("✉️ Publipostage Intelligent & Impression")
+        st.write("Sélectionnez vos adresses ci-dessous (ou l'application récupère automatiquement vos lignes cochées dans l'onglet 1) pour générer les courriers prêts à imprimer.")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
-            adresses_selectionnees = st.multiselect("📍 Sélectionner les adresses pour le publipostage :", liste_adresses)
+            
+            # Récupération automatique des lignes cochées dans le tableau de l'onglet 1 si l'utilisateur en a sélectionné
+            lignes_selectionnees_indices = []
+            if event_selection and 'selection' in event_selection:
+                lignes_selectionnees_indices = event_selection['selection'].get('rows', [])
+            
+            adresses_par_defaut = [liste_adresses[i] for i in lignes_selectionnees_indices if i < len(liste_adresses)]
+            
+            # Multiselect synchronisé
+            adresses_selectionnees = st.multiselect(
+                "📍 Adresses sélectionnées pour le courrier :", 
+                liste_adresses, 
+                default=adresses_par_defaut
+            )
             
             if not adresses_selectionnees:
-                st.info("👈 Cochez une ou plusieurs adresses dans le menu ci-dessus pour générer les courriers correspondants.")
+                st.info("👈 Cochez des lignes dans le tableau de l'onglet 1 ou sélectionnez des adresses ci-dessus.")
             else:
                 date_jour = datetime.now().strftime("%d/%m/%Y")
+                
+                # BOUTON D'IMPRESSION GLOBAL
+                col_btn1, col_btn2 = st.columns([1, 4])
+                with col_btn1:
+                    if st.button("🖨️ Imprimer la sélection", type="primary"):
+                        st.balloons()
+                        st.success("📄 Vos courriers sont prêts ! Utilisez le raccourci de votre navigateur (`Ctrl + P` ou `Cmd + P`) pour imprimer.")
+
+                st.markdown("---")
                 
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
