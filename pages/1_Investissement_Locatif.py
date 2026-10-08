@@ -1,241 +1,147 @@
 import streamlit as st
 import pandas as pd
-import requests
 from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Investissement Locatif & Veille Juridique - Nice",
-    page_icon="📈",
+    page_title="Investissement Locatif & SCI - Nice",
+    page_icon="🏢",
     layout="wide"
 )
 
-st.title("📈 Espace Investisseurs, SCI & Veille Juridique LMNP/Pinel")
-st.markdown("Ciblage patrimonial, enrichissement automatique des sociétés et veille juridique multi-niveaux pour vos arguments de vente.")
+st.title("🏢 Espace Investissement Locatif & SCI - Nice")
+st.markdown("Ciblage spécifique des structures sociétaires, des investisseurs et génération des courriers patrimoniaux.")
 
-# Chargement du fichier CSV
+# --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
+if 'df_locatif' not in st.session_state:
+    st.session_state.df_locatif = pd.DataFrame()
+if 'analyse_locative_terminee' not in st.session_state:
+    st.session_state.analyse_locative_terminee = False
+
+# Chargement du fichier source (on peut réutiliser le fichier DPE ou un fichier dédié si existant)
 try:
     df_global = pd.read_csv('dpe_nice_fg.csv')
 except Exception as e:
     df_global = pd.DataFrame()
-    st.error(f"Erreur critique lors du chargement du fichier CSV : {e}")
+    st.error(f"Erreur critique lors du chargement des données : {e}")
 
-# --- FONCTION D'ENRICHISSEMENT DES SOCIÉTÉS / SCI ---
-def chercher_infos_entreprise(terme_recherche, rue_secours=""):
-    url = "https://recherche-entreprises.api.gouv.fr/search"
-    queries = [terme_recherche]
-    if rue_secours:
-        queries.append(f"SCI {rue_secours} Nice")
-        queries.append(f"Immobilier {rue_secours} Nice")
-        
-    for q in queries:
-        if not q or str(q).lower() == "nan":
-            continue
-        params = {"q": q, "per_page": 3}
-        try:
-            response = requests.get(url, params=params, timeout=3)
-            if response.status_code == 200:
-                resultats = response.json().get("results", [])
-                if resultats:
-                    best_match = resultats[0]
-                    for res in resultats:
-                        siege = res.get("siege", {})
-                        cp = str(siege.get("code_postal", ""))
-                        if cp.startswith("06"):
-                            best_match = res
-                            break
-                    siren = best_match.get("siren", "N/A")
-                    dirigeants = best_match.get("dirigeants", [])
-                    nom_dirigeant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else "Non renseigné"
-                    siege = best_match.get("siege", {})
-                    adresse_siege = f"{siege.get('adresse', '')}, {siege.get('code_postal', '')} {siege.get('libelle_commune', '')}"
-                    if siren != "N/A":
-                        return {
-                            "siren": siren,
-                            "dirigeant": nom_dirigeant if nom_dirigeant else "Non renseigné",
-                            "siege": adresse_siege.strip(", ") if adresse_siege.strip(", ") else "Adresse non renseignée"
-                        }
-        except Exception:
-            pass
-    return {"siren": "N/A", "dirigeant": "N/A", "siege": "N/A"}
+# --- BARRE LATÉRALE DE RECHERCHE INVESTISSEUR ---
+st.sidebar.header("🎯 Ciblage Investisseurs & SCI")
 
-# --- BARRE LATÉRALE DE RECHERCHE ---
-st.sidebar.header("Filtres Investisseurs & Fiscalité")
-
-strategie = st.sidebar.selectbox(
-    "Profil de ciblage",
-    [
-        "Ciblage SCI / Sociétés (Enrichissement SIRENE)",
-        "Fin de cycle Pinel / Arbitrage Bailleur",
-        "Ciblage Typologie Investisseur (Studios / 2 pièces)",
-        "🚨 Hub de Veille Juridique (Niveaux d'Alerte)"
-    ]
+secteur_locatif = st.sidebar.selectbox(
+    "Quartier / Secteur",
+    ["Tous les secteurs", "Carré d'Or", "Port / Garibaldi", "Musiciens / Gambetta", "Centre-ville"]
 )
 
-secteur = st.sidebar.selectbox(
-    "Quartier / Secteur à Nice",
-    [
-        "Tous les secteurs",
-        "Carré d'Or",
-        "Promenade des Anglais",
-        "Port / Garibaldi",
-        "Mont Boron",
-        "Musiciens / Gambetta",
-        "Centre-ville"
-    ]
+tranche_lot_loc = st.sidebar.selectbox(
+    "Tranche de prospection", 
+    ["Lot 1 (1 - 50)", "Lot 2 (51 - 100)", "Lot 3 (101 - 150)", "Lot 4 (151 - 200)"]
 )
 
-# Gestion automatique du mois / lot avec option de secours manuelle
-mois_actuel = datetime.now().month
-if mois_actuel <= 10:
-    lot_auto_index = 0
-elif mois_actuel == 11:
-    lot_auto_index = 1
-elif mois_actuel == 12:
-    lot_auto_index = 2
-else:
-    lot_auto_index = 3
-
-liste_lots = [
-    "Lot 1 (1 - 50)",
-    "Lot 2 (51 - 100)",
-    "Lot 3 (101 - 150)",
-    "Lot 4 (151 - 200)",
-    "Lot 5 (201 - 250)"
-]
-
-mode_manuel = st.sidebar.checkbox("🔧 Activer le choix manuel du lot (secours)", value=False, key="manuel_inv")
-
-if mode_manuel:
-    tranche_mois = st.sidebar.selectbox("Choisir le lot investisseur manuellement", liste_lots, key="select_inv")
-else:
-    tranche_mois = liste_lots[min(lot_auto_index, len(liste_lots) - 1)]
-    st.sidebar.info(f"📅 Lot investisseur attribué (Mois en cours) : **{tranche_mois}**")
-
-lancer = st.sidebar.button("Analyser le portefeuille investisseur")
-
-# --- CORPS DE LA PAGE ---
-
-if strategie == "🚨 Hub de Veille Juridique (Niveaux d'Alerte)":
-    st.header("⚖️ Hub de Veille Juridique & Stratégie Immobilière")
-    st.markdown("""
-    Cette section segmente l'actualité fiscale et réglementaire selon son degré de validation juridique, 
-    vous permettant d'adapter précisément votre discours commercial sur le terrain.
-    """)
-    
-    # Niveau 1 : Projets / En discussion
-    st.markdown("---")
-    st.subheader("🟡 Niveau 1 : ⚠️ PROJET / EN DISCUSSION (Anticipation & Conseil Patrimonial)")
-    st.info("""
-    **Sujet : Évolutions du régime LMNP et de la fiscalité des amortissements**
-    * **État actuel du texte :** En cours de discussion et d'amendements (Projet de loi de finances). **Non voté, non applicable à ce jour.**
-    * **Impact potentiel :** Remise en cause potentielle du calcul des amortissements ou réintégration dans les plus-values.
-    * **Argument de prospection (Posture conseil) :** *"Anticiper l'évolution fiscale avant la promulgation définitive permet d'étudier un arbitrage dans de bonnes conditions et de sécuriser votre prix net vendeur."*
-    """)
-    
-    # Niveau 2 : Textes votés / Applicables
-    fn_col1, fn_col2 = st.columns(2)
-    with fn_col1:
-        st.markdown("---")
-        st.subheader("🟢 Niveau 2 : ✅ TEXTE VOTÉ / APPLICABLE (Obligation légale)")
-        st.success("""
-        **Sujet : Interdiction de mise en location des passoires énergétiques (Loi Climat & Résilience)**
-        * **État actuel du texte :** **Voté et en vigueur.**
-        * **Impact concret :** Gel progressif des loyers puis interdiction de louer les classes F et G.
-        * **Argument de prospection (Urgence terrain) :** *"Votre bien classé en F/G est frappé par les restrictions légales de location. Plutôt que de financer des travaux lourds, l'arbitrage immédiat sécurise votre capital."*
-        """)
+# Bouton de lancement
+if st.sidebar.button("Générer le listing Investisseurs / SCI", type="primary"):
+    if not df_global.empty:
+        df_res = df_global.copy()
         
-    with fn_col2:
-        st.markdown("---")
-        st.subheader("🔗 Accès aux Sources Officielles")
-        st.markdown("""
-        Pour vérifier l'état exact des textes en direct :
-        * 🏛️ [Legifrance (Code Général des Impôts)](https://www.legifrance.gouv.fr)
-        * 📊 [Service-Public.fr (Immobilier & Fiscalité)](https://www.service-public.fr)
-        * 📑 [Assemblée Nationale (Dossiers Législatifs)](https://www.assemblee-nationale.fr)
-        """)
-
-else:
-    # --- TRAITEMENT CLASSIQUE DU PORTFEUILLE INVESTISSEUR ---
-    if lancer:
-        if df_global.empty:
-            st.error("⚠️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
-        else:
-            df_resultats = df_global.copy()
+        # Filtrage ciblé sur les structures sociétaires (SCI, SARL, etc.) si la colonne existe, ou simulation d'analyse patrimoniale
+        colonnes_locatif = {}
+        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
+            if col in df_res.columns: colonnes_locatif[col] = 'Adresse Exacte'; break
             
-            colonnes_utiles = {}
-            if 'adresse_ban' in df_resultats.columns:
-                colonnes_utiles['adresse_ban'] = 'Adresse Exacte'
-            elif 'adresse_brute' in df_resultats.columns:
-                colonnes_utiles['adresse_brute'] = 'Adresse Exacte'
-                
-            if 'code_postal_ban' in df_resultats.columns:
-                colonnes_utiles['code_postal_ban'] = 'Code Postal'
-                
-            if 'surface_habitable_logement' in df_resultats.columns:
-                colonnes_utiles['surface_habitable_logement'] = 'Surface (m²)'
-                
-            if 'date_etablissement_dpe' in df_resultats.columns:
-                colonnes_utiles['date_etablissement_dpe'] = 'Date DPE'
+        for col, nom in [
+            ('numero_appartement', 'N° Apt'),
+            ('numero_lot', 'N° Lot'),
+            ('etage', 'Étage'),
+            ('etiquette_dpe', 'Note DPE'),
+            ('nom_proprietaire', 'Propriétaire / SCI'),
+            ('raison_sociale', 'Propriétaire / SCI')
+        ]:
+            if col in df_res.columns: colonnes_locatif[col] = nom
 
-            if colonnes_utiles:
-                df_affichage = df_resultats[list(colonnes_utiles.keys())].rename(columns=colonnes_utiles)
-            else:
-                df_affichage = df_resultats 
+        df_affichage = df_res[list(colonnes_locatif.keys())].rename(columns=colonnes_locatif)
+        df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
 
-            # Filtrage par secteur
-            if secteur != "Tous les secteurs":
-                rues_quartiers = {
-                    "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt", "dalpozzo", "grimaldi"],
-                    "Promenade des Anglais": ["promenade des anglais", "etats-unis", "quai des etats-unis"],
-                    "Port / Garibaldi": ["garibaldi", "lunel", "cassini", "barla", "arson", "republique", "port", "république", "catherine segurane"],
-                    "Mont Boron": ["mont boron", "jean lorrain", "carnot", "germaine", "andre joly", "valrose", "cap de nice", "montee"],
-                    "Musiciens / Gambetta": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo", "offenbach", "turenne"],
-                    "Centre-ville": ["jean medecin", "gioffredo", "marechal foch", "pastorelli", "de chateauneuf", "assalit", "durandy"]
-                }
-                mots_cles = rues_quartiers.get(secteur, [])
-                if 'Adresse Exacte' in df_affichage.columns and mots_cles:
-                    pattern = '|'.join(mots_cles)
-                    mask_rue = df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)
-                    df_affichage = df_affichage[mask_rue]
+        # Filtrage pour ne garder idéalement que les entités ou profils investisseurs si la colonne propriétaire existe
+        if 'Propriétaire / SCI' in df_affichage.columns:
+            # On met en avant les SCI / structures ou on garde une base qualifiée investisseur
+            mask_sci = df_affichage['Propriétaire / SCI'].astype(str).str.upper().str.contains("SCI|SARL|SAS|HOLDING|IMMOBILIERE", na=False)
+            if mask_sci.sum() > 0:
+                df_affichage = df_affichage[mask_sci] # Priorité aux structures si présentes
 
-            # Tri chronologique par date de DPE
-            if 'Date DPE' in df_affichage.columns:
-                df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
+        # Découpage du lot
+        idx_deb = (int(tranche_lot_loc.split()[1]) - 1) * 50
+        st.session_state.df_locatif = df_affichage.iloc[idx_deb:idx_deb + 50]
+        st.session_state.analyse_locative_terminee = True
 
-            # Découpage par tranche de 50
-            index_debut = (int(tranche_mois.split()[1]) - 1) * 50
-            index_fin = index_debut + 50
-            df_affichage = df_affichage.iloc[index_debut:index_fin]
 
-            # Colonne intelligente de détection Pinel / Arbitrage
-            df_affichage['Potentiel Investisseur / Pinel'] = "Cible Bailleur / Sortie de défiscalisation potentielle"
+# --- AFFICHAGE PRINCIPAL EN 2 ONGLETS ---
+if st.session_state.analyse_locative_terminee:
+    
+    tab1, tab2 = st.tabs([
+        "📊 1. Listing Investisseurs & SCI", 
+        "✉️ 2. Publipostage & Impression des Courriers"
+    ])
+    
+    with tab1:
+        st.success(f"✅ Listing généré ! **{len(st.session_state.df_locatif)}** actifs identifiés pour l'investissement locatif.")
+        
+        event_selection_loc = st.dataframe(
+            st.session_state.df_locatif, 
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="multi-row",
+            key="table_locatif"
+        )
+        
+        st.download_button("📥 Télécharger le listing Investisseurs (CSV)", data=st.session_state.df_locatif.to_csv(index=False).encode('utf-8'), file_name="listing_investissement_locatif.csv", mime='text/csv')
 
-            # Enrichissement automatique SCI / Sociétés
-            st.info("🔄 Interrogation approfondie de l'API Sirene pour ce lot de sociétés...")
-            sirens, dirigeants, sieges = [], [], []
+    with tab2:
+        st.header("✉️ Générateur de Courriers Investisseur & SCI")
+        st.write("Sélectionnez vos adresses ci-dessous pour personnaliser instantanément les courriers à destination des gérants de SCI ou investisseurs.")
+        
+        if 'Adresse Exacte' in st.session_state.df_locatif.columns:
+            liste_adresses_loc = st.session_state.df_locatif['Adresse Exacte'].dropna().unique().tolist()
             
-            for idx, row in df_affichage.iterrows():
-                adresse = str(row.get('Adresse Exacte', ''))
-                terme_recherche = f"SCI {adresse}"
-                infos = chercher_infos_entreprise(terme_recherche, rue_secours=adresse)
-                sirens.append(infos['siren'])
-                dirigeants.append(infos['dirigeant'])
-                sieges.append(infos['siege'])
-                
-            df_affichage['N° SIREN'] = sirens
-            df_affichage['Gérant / Mandataire'] = dirigeants
-            df_affichage['Siège Social'] = sieges
-
-            st.success(f"✅ Analyse générée ({tranche_mois}) ! **{len(df_affichage)}** biens qualifiés pour : *{strategie}*.")
-            st.dataframe(df_affichage, use_container_width=True)
+            lignes_selectionnees_indices = []
+            if event_selection_loc and 'selection' in event_selection_loc:
+                lignes_selectionnees_indices = event_selection_loc['selection'].get('rows', [])
             
-            csv = df_affichage.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label=f"📥 Télécharger ce {tranche_mois} (CSV)",
-                data=csv,
-                file_name=f"listing_investisseurs_{secteur.lower().replace(' ', '_')}_{tranche_mois.lower().replace(' ', '_')}.csv",
-                mime='text/csv',
+            adresses_par_defaut = [liste_adresses_loc[i] for i in lignes_selectionnees_indices if i < len(liste_adresses_loc)]
+            
+            adresses_selectionnees = st.multiselect(
+                "📍 Adresses sélectionnées pour la campagne investisseur :", 
+                liste_adresses_loc, 
+                default=adresses_par_defaut
             )
-    else:
-        st.info("👉 Sélectionnez vos critères dans le menu latéral, puis cliquez sur **'Analyser le portefeuille investisseur'**.")
+            
+            if adresses_selectionnees:
+                date_jour = datetime.now().strftime("%d/%m/%Y")
+                
+                if st.button("🖨️ Préparer l'impression groupée", type="primary"):
+                    st.success("📄 Courriers investisseurs prêts ! Utilisez `Ctrl + P` ou `Cmd + P` pour lancer l'impression.")
+
+                st.markdown("---")
+                
+                for adresse in adresses_selectionnees:
+                    ligne_bien = st.session_state.df_locatif[st.session_state.df_locatif['Adresse Exacte'] == adresse].iloc[0]
+                    proprietaire = ligne_bien.get('Propriétaire / SCI', 'Gérant / Investisseur')
+                    apt = ligne_bien.get('N° Apt', '')
+                    etage = ligne_bien.get('Étage', '')
+                    
+                    infos_repere = []
+                    if etage: infos_repere.append(f"Étage : {etage}")
+                    if apt: infos_repere.append(f"Apt {apt}")
+                    str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
+
+                    st.markdown(f"### 📍 {adresse} ({str_reperage})")
+                    st.markdown(f"**Structure / Propriétaire :** `{proprietaire}`")
+                    
+                    st.text_area(
+                        f"📄 Modèle de courrier Investisseur / SCI :", 
+                        value=f"Nice, le {date_jour}\n\nObjet : Anticipation fiscale, arbitrage et optimisation de votre actif au {adresse}\n\nÀ l'attention de {proprietaire},\n\nEn qualité de professionnel de l'immobilier patrimonial à Nice, je me permets de vous contacter concernant l'actif que vous détenez au {adresse} ({str_reperage}).\n\nDans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette et optimiser la transmission ou la revente de vos actifs.\n\nJe me tiens à votre entière disposition pour réaliser un audit confidentiel de valorisation.\n\nBien cordialement,\n\nNathalie Parra\n[Votre Agence / Coordonnées]", 
+                        height=260,
+                        key=f"courrier_loc_{adresse}"
+                    )
+                    st.markdown("---")
+else:
+    st.info("👉 Sélectionnez vos critères dans la barre latérale, puis cliquez sur **'Générer le listing Investisseurs / SCI'**.")
