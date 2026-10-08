@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : passoires énergétiques (F & G) et ciblage par quartier.")
+st.markdown("Base de données certifiée : passoires énergétiques (F & G) et ciblage par quartier (avec détection des mandats mûrs).")
 
 # Chargement du fichier CSV
 try:
@@ -75,7 +75,7 @@ lancer = st.sidebar.button("Générer le listing certifié")
 # --- TRAITEMENT ET AFFICHAGE ---
 if lancer:
     if df_global.empty:
-        st.error("⚠️️ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
+        st.error("⚠ Le fichier `dpe_nice_fg.csv` est introuvable à la racine du dépôt GitHub.")
     else:
         df_resultats = df_global.copy()
         
@@ -134,6 +134,27 @@ if lancer:
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
 
+        # --- CALCUL DE L'ANCIENNETÉ DU DPE ET QUALIFICATION DES MANDATS ---
+        if 'Date DPE' in df_affichage.columns:
+            date_actuelle = datetime.now()
+            statuts_mandats = []
+            
+            for d in df_affichage['Date DPE']:
+                try:
+                    dt_dpe = pd.to_datetime(d)
+                    diff_mois = (date_actuelle.year - dt_dpe.year) * 12 + (date_actuelle.month - dt_dpe.month)
+                    
+                    if 3 <= diff_mois <= 6:
+                        statuts_mandats.append("🎯 Cible Mandat Mûr (3-6 mois) - Potentiel essoufflement agence")
+                    elif diff_mois < 3:
+                        statuts_mandats.append("⚡ DPE très récent (< 3 mois) - Concurrence active possible")
+                    else:
+                        statuts_mandats.append("🏢 Bailleur / Historique (> 6 mois)")
+                except Exception:
+                    statuts_mandats.append("📅 À qualifier")
+                    
+            df_affichage['Statut Mandat / Ancienneté'] = statuts_mandats
+
         # Découpage par tranche de 50
         index_debut = (int(tranche_mois.split()[1]) - 1) * 50
         index_fin = index_debut + 50
@@ -150,7 +171,7 @@ if lancer:
             label=f"📥 Télécharger ce {tranche_mois} (CSV)",
             data=csv,
             file_name=f"listing_{secteur.lower().replace(' ', '_')}_{tranche_mois.lower().replace(' ', '_')}.csv",
-            mime='text/css' if False else 'text/csv',
+            mime='text/csv',
         )
 else:
     st.info("👉 Sélectionnez vos critères dans le menu à gauche, puis cliquez sur **'Générer le listing certifié'**.")
