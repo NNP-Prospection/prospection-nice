@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Passoires énergétiques, croisement DVF (mutations) et publipostage intelligent.")
+st.markdown("Base de données certifiée : Passoires énergétiques, cycles de détention (5 ans) et publipostage.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -18,18 +18,12 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
-# Chargement des fichiers de données
+# Chargement du fichier CSV
 try:
     df_global = pd.read_csv('dpe_nice_fg.csv')
 except Exception as e:
     df_global = pd.DataFrame()
     st.error(f"Erreur critique lors du chargement du fichier DPE : {e}")
-
-# Tentative de chargement du fichier DVF (mutations) s'il est disponible
-try:
-    df_dvf = pd.read_csv('dvf_nice.csv')
-except:
-    df_dvf = pd.DataFrame() # Optionnel si le fichier n'est pas encore versé
 
 # --- BARRE LATÉRALE DE RECHERCHE ---
 st.sidebar.header("🎯 Critères de ciblage")
@@ -74,7 +68,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse combinée (DPE + Simulation DVF / Ancienneté)
+        # Analyse combinée des profils et cycles
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -86,7 +80,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                     dt_dpe = pd.to_datetime(d)
                     diff_mois = (date_actuelle.year - dt_dpe.year) * 12 + (date_actuelle.month - dt_dpe.month)
                     
-                    # Logique combinée DPE / Ancienneté simulée ou DVF
                     if 3 <= diff_mois <= 6:
                         statuts_mandats.append("🎯 Mandat Mûr (3-6 mois)")
                     elif diff_mois < 3:
@@ -106,20 +99,44 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         st.session_state.analyse_terminee = True
 
 
-# --- AFFICHAGE PRINCIPAL EN ONGLETS ---
+# --- AFFICHAGE PRINCIPAL EN 3 ONGLETS ---
 if st.session_state.analyse_terminee:
-    tab1, tab2 = st.tabs(["📊 1. Base de données & Ciblage", "✉️ 2. Publipostage Intelligent"])
     
-    # ONGLET 1
+    tab1, tab2, tab3 = st.tabs([
+        "📊 1. Passoires F&G & Mandats Mûrs", 
+        "⏳ 2. Turnover ~5 ans & Cycles", 
+        "✉️ 3. Publipostage Intelligent"
+    ])
+    
+    # ONGLET 1 : BASE GLOBALE ET MANDATS MÛRS
     with tab1:
-        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés.")
+        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés pour le secteur : *{secteur}*.")
         st.dataframe(st.session_state.df_affichage, use_container_width=True)
-        st.download_button("📥 Télécharger ce lot (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing.csv", mime='text/csv')
+        st.download_button("📥 Télécharger ce lot global (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_global.csv", mime='text/csv')
 
-    # ONGLET 2 : LE GÉNÉRATEUR INTELLIGENT ET MULTI-SÉLECTION
+    # ONGLET 2 : CIBLAGE DÉDIÉ AU TURNOVER DE 5 ANS
     with tab2:
+        st.header("⏳ Analyse des cycles de détention (~5 ans)")
+        st.write("Cet onglet isole spécifiquement les biens dont le profil correspond au turnover de 5 ans (fin de premier cycle d'investissement ou arbitrage de résidence secondaire).")
+        
+        if 'Profil & Ancienneté' in st.session_state.df_affichage.columns:
+            df_5ans = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Ancienneté'].str.contains("Turnover ~5 ans", na=False)]
+            
+            if df_5ans.empty:
+                st.info("ℹ️ Aucun bien ne correspond strictement au profil 'Turnover ~5 ans' dans ce lot de 50. Essayez un autre lot ou un autre secteur.")
+            else:
+                st.success(f"🎯 **{len(df_5ans)} biens** identifiés avec un profil de détention de type 'Turnover ~5 ans'.")
+                st.dataframe(df_5ans, use_container_width=True)
+                
+                csv_5ans = df_5ans.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Télécharger ce listing 'Turnover 5 ans' (CSV)", data=csv_5ans, file_name="listing_turnover_5ans.csv", mime='text/csv')
+        else:
+            st.warning("Données d'ancienneté non disponibles.")
+
+    # ONGLET 3 : LE GÉNÉRATEUR DE COURRIERS EN LOT
+    with tab3:
         st.header("✉️ Générateur Automatique de Courriers en Lot")
-        st.write("Sélectionnez plusieurs adresses ci-dessous : l'application analyse le profil (Turnover 5 ans, Longue détention, Mandat mûr ou SCI) et rédige instantanément le courrier adéquat.")
+        st.write("Sélectionnez plusieurs adresses : l'application détecte le profil exact (Turnover 5 ans, Longue détention, Mandat mûr ou SCI) et rédige instantanément le courrier adapté.")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
@@ -130,12 +147,10 @@ if st.session_state.analyse_terminee:
             else:
                 date_jour = datetime.now().strftime("%d/%m/%Y")
                 
-                # BOUCLE DE MULTI-SÉLECTION AUTOMATISÉE
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Ancienneté', '')
                     
-                    # Détection SCI / Professionnel
                     est_sci = False
                     if 'Propriétaire' in ligne_bien.index and isinstance(ligne_bien['Propriétaire'], str):
                         if "SCI" in ligne_bien['Propriétaire'].upper():
@@ -162,7 +177,6 @@ if st.session_state.analyse_terminee:
                         sujet = f"Stratégie de vente et positionnement de votre bien au {adresse}"
                         corps = f"En analysant les données techniques de votre secteur, j'ai noté qu'un Diagnostic de Performance Énergétique a été réalisé pour votre bien situé au {adresse} il y a quelques mois.\n\nSi votre bien est actuellement sur le marché et ne trouve pas preneur, sachez que les acquéreurs sont exigeants. Les caractéristiques énergétiques fragilisent le prix net vendeur si elles ne sont pas défendues par des arguments techniques solides."
                     
-                    # Affichage du bloc de texte pour chaque bien sélectionné
                     st.markdown(f"### 📍 {adresse}")
                     st.markdown(f"**Stratégie appliquée :** `{type_courrier}`")
                     st.text_area(
