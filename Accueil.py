@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Repères de copropriété, résidences secondaires et publipostage.")
+st.markdown("Base de données certifiée : Repères de copropriété (Étage, Appartement) et publipostage.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -46,23 +46,20 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
-        # Mappage large pour récupérer TOUS les repères d'identification du bien
+        # Mappage exhaustif pour capturer toutes les variantes possibles des noms de colonnes dans les DPE
         colonnes_utiles = {}
         
-        # Adresses et codes postaux
-        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
+        # Recherche des adresses
+        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete', 'N° et voie de la rue']:
             if col in df_resultats.columns: colonnes_utiles[col] = 'Adresse Exacte'
-        for col in ['code_postal_ban', 'code_postal']:
-            if col in df_resultats.columns: colonnes_utiles[col] = 'Code Postal'
             
-        # Repères de copropriété essentiels pour le boîtage
+        # Recherche des repères indispensables pour le boîtage (Étage, Appartement, Bâtiment)
         for col, nom in [
             ('numero_appartement', 'N° Apt'),
             ('numero_lot', 'N° Lot'),
             ('batiment', 'Bâtiment'),
             ('escalier', 'Escalier'),
             ('etage', 'Étage'),
-            ('surface_habitable_logement', 'Surface (m²)'),
             ('etiquette_dpe', 'Note DPE'),
             ('date_etablissement_dpe', 'Date DPE'),
             ('nom_proprietaire', 'Propriétaire / SCI'),
@@ -71,7 +68,16 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
             if col in df_resultats.columns:
                 colonnes_utiles[col] = nom
 
-        # Application du renommage sur les colonnes présentes
+        # Si certaines colonnes standards existent sous d'autres dénominations dans le fichier brut
+        if 'N° Apt' not in colonnes_utiles.values():
+            for c in df_resultats.columns:
+                if 'appt' in c.lower() or 'appartement' in c.lower() or 'porte' in c.lower():
+                    colonnes_utiles[c] = 'N° Apt'
+        if 'Étage' not in colonnes_utiles.values():
+            for c in df_resultats.columns:
+                if 'etage' in c.lower():
+                    colonnes_utiles[c] = 'Étage'
+
         colonnes_finales_presentes = {k: v for k, v in colonnes_utiles.items() if k in df_resultats.columns}
         df_affichage = df_resultats[list(colonnes_finales_presentes.keys())].rename(columns=colonnes_finales_presentes)
 
@@ -90,7 +96,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse des profils et repérage géographique des résidences secondaires
+        # Analyse des profils et repérage des résidences secondaires
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -136,7 +142,7 @@ if st.session_state.analyse_terminee:
     # ONGLET 1 : BASE GLOBALE AVEC REPÈRES COMPLETS ET SÉLECTION
     with tab1:
         st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères pour le secteur : *{secteur}*.")
-        st.info("💡 *Le tableau affiche désormais les numéros de lots, d'appartements, d'étages et les noms de SCI lorsqu'ils sont renseignés.*")
+        st.markdown("🎯 *Ce tableau intègre les étages, numéros d'appartements et structures pour vos boîtages.*")
         
         event_selection = st.dataframe(
             st.session_state.df_affichage, 
@@ -151,7 +157,7 @@ if st.session_state.analyse_terminee:
     # ONGLET 2 : RÉSIDENCES SECONDAIRES
     with tab2:
         st.header("🏖️ Ciblage Résidences Secondaires & Turnover (5 ans)")
-        st.write("Biens localisés sur les grands axes de villégiature niçoise.")
+        st.write("Biens localisés sur les grands axes de villégiature niçoise avec leurs repères d'étage et d'appartement.")
         
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_sec = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Résidence Secondaire", na=False)]
@@ -162,14 +168,14 @@ if st.session_state.analyse_terminee:
                 st.success(f"🎯 **{len(df_sec)} biens** identifiés.")
                 st.dataframe(df_sec, use_container_width=True)
                 csv_sec = df_sec.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Télécharger le listing (CSV)", data=csv_sec, file_name="listing_residences_secondaires.csv", mime='text/csv')
+                st.download_button("📥 Télécharger le listing Résidences Secondaires (CSV)", data=csv_sec, file_name="listing_residences_secondaires.csv", mime='text/csv')
         else:
             st.warning("Données de profil non disponibles.")
 
     # ONGLET 3 : IMPRESSION ET COURRIERS
     with tab3:
         st.header("✉️ Publipostage Intelligent & Impression")
-        st.write("Générez vos courriers personnalisés avec les informations de lot, d'étage et de structure juridique.")
+        st.write("Générez vos courriers personnalisés avec les informations d'étage et de numéro d'appartement.")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
@@ -200,14 +206,12 @@ if st.session_state.analyse_terminee:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Stratégie', '')
                     
-                    # Récupération propre des repères s'ils existent dans la ligne
                     proprietaire = ligne_bien.get('Propriétaire / SCI', 'Propriétaire')
                     apt = ligne_bien.get('N° Apt', '')
                     lot = ligne_bien.get('N° Lot', '')
                     etage = ligne_bien.get('Étage', '')
                     bat = ligne_bien.get('Bâtiment', '')
                     
-                    # Constitution d'une mention de repérage pour l'en-tête du courrier
                     infos_repere = []
                     if bat: infos_repere.append(f"Bât. {bat}")
                     if etage: infos_repere.append(f"Étage : {etage}")
@@ -219,7 +223,6 @@ if st.session_state.analyse_terminee:
                     if isinstance(proprietaire, str) and ("SCI" in proprietaire.upper() or "SARL" in proprietaire.upper() or "SAS" in proprietaire.upper()):
                         est_sci = True
                             
-                    # Attribution automatique du Courrier
                     if est_sci:
                         type_courrier = f"🏢 Courrier 4 : Investisseur / SCI ({proprietaire})"
                         sujet = f"Anticipation fiscale et arbitrage de votre actif au {adresse}"
@@ -238,7 +241,7 @@ if st.session_state.analyse_terminee:
                     else:
                         type_courrier = "⏳ Courrier Passoire F/G Standard"
                         sujet = f"Impact réglementaire et optimisation de votre bien au {adresse}"
-                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}, {str_reperage}),\n\nL'évolution de la Loi Climat impose des contraintes lourdes sur ce bien énergivore. Anticiper sa cession en l'état vous permet de purger votre plus-value sans subir les coûts de rénovation de copropriété."
+                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}),\n\nL'évolution de la Loi Climat impose des contraintes lourdes sur ce bien énergivore. Anticiper sa cession en l'état vous permet de purger votre plus-value sans subir les coûts de rénovation de copropriété."
                     
                     st.markdown(f"### 📍 {adresse}")
                     st.markdown(f"**Repères :** `{str_reperage}` | **Cible :** `{type_courrier}`")
