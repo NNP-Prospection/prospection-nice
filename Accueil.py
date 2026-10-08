@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Repères de copropriété (Étage, Appartement) et publipostage.")
+st.markdown("Base de données certifiée : Repères de copropriété (Étage, Appartement, Lot) et publipostage.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -46,29 +46,36 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
-        # Sélection unique et propre des colonnes pour éviter les doublons
+        # Mappage intelligent pour récupérer toutes les colonnes disponibles (Adresse, Étage, Appartement, Lot)
         colonnes_a_garder = {}
         
+        # Recherche de l'adresse
         for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
             if col in df_resultats.columns:
                 colonnes_a_garder[col] = 'Adresse Exacte'
-                break # On prend la première trouvée pour éviter les doublons
+                break
                 
-        for col, nom in [
-            ('numero_appartement', 'N° Apt'),
-            ('numero_lot', 'N° Lot'),
-            ('batiment', 'Bâtiment'),
-            ('etage', 'Étage'),
-            ('etiquette_dpe', 'Note DPE'),
-            ('date_etablissement_dpe', 'Date DPE'),
-            ('nom_proprietaire', 'Propriétaire / SCI')
-        ]:
-            if col in df_resultats.columns and nom not in colonnes_a_garder.values():
-                colonnes_a_garder[col] = nom
+        # Recherche ciblée des repères DPE (Étage, Appartement, Lot, Bâtiment)
+        for col in df_resultats.columns:
+            col_lower = col.lower()
+            if 'etage' in col_lower or 'niveau' in col_lower:
+                colonnes_a_garder[col] = 'Étage'
+            elif 'appartement' in col_lower or 'porte' in col_lower or 'numero_appt' in col_lower:
+                colonnes_a_garder[col] = 'N° Apt'
+            elif 'lot' in col_lower:
+                colonnes_a_garder[col] = 'N° Lot'
+            elif 'batiment' in col_lower or 'bat' in col_lower:
+                colonnes_a_garder[col] = 'Bâtiment'
+            elif 'etiquette' in col_lower and 'dpe' in col_lower:
+                colonnes_a_garder[col] = 'Note DPE'
+            elif 'date' in col_lower and 'dpe' in col_lower:
+                colonnes_a_garder[col] = 'Date DPE'
+            elif 'proprietaire' in col_lower or 'raison_sociale' in col_lower:
+                colonnes_a_garder[col] = 'Propriétaire / SCI'
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
 
-        # Nettoyage de sécurité ultime anti-doublons de colonnes
+        # Nettoyage anti-doublons de colonnes
         df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
 
         # Filtrage par quartier
@@ -86,7 +93,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse des profils
+        # Analyse des profils et de la stratégie
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -131,6 +138,7 @@ if st.session_state.analyse_terminee:
     
     with tab1:
         st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères.")
+        st.info("💡 *Les colonnes d'étage, de numéro d'appartement et de lot ont été récupérées pour vos boîtages.*")
         
         event_selection = st.dataframe(
             st.session_state.df_affichage, 
@@ -181,6 +189,8 @@ if st.session_state.analyse_terminee:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Stratégie', '')
                     proprietaire = ligne_bien.get('Propriétaire / SCI', 'Propriétaire')
+                    
+                    # Récupération dynamique des repères d'étage et d'appartement
                     apt = ligne_bien.get('N° Apt', '')
                     lot = ligne_bien.get('N° Lot', '')
                     etage = ligne_bien.get('Étage', '')
