@@ -46,40 +46,30 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
-        # Mappage exhaustif pour capturer toutes les variantes possibles des noms de colonnes dans les DPE
-        colonnes_utiles = {}
+        # Sélection unique et propre des colonnes pour éviter les doublons
+        colonnes_a_garder = {}
         
-        # Recherche des adresses
-        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete', 'N° et voie de la rue']:
-            if col in df_resultats.columns: colonnes_utiles[col] = 'Adresse Exacte'
-            
-        # Recherche des repères indispensables pour le boîtage (Étage, Appartement, Bâtiment)
+        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
+            if col in df_resultats.columns:
+                colonnes_a_garder[col] = 'Adresse Exacte'
+                break # On prend la première trouvée pour éviter les doublons
+                
         for col, nom in [
             ('numero_appartement', 'N° Apt'),
             ('numero_lot', 'N° Lot'),
             ('batiment', 'Bâtiment'),
-            ('escalier', 'Escalier'),
             ('etage', 'Étage'),
             ('etiquette_dpe', 'Note DPE'),
             ('date_etablissement_dpe', 'Date DPE'),
-            ('nom_proprietaire', 'Propriétaire / SCI'),
-            ('raison_sociale', 'Propriétaire / SCI')
+            ('nom_proprietaire', 'Propriétaire / SCI')
         ]:
-            if col in df_resultats.columns:
-                colonnes_utiles[col] = nom
+            if col in df_resultats.columns and nom not in colonnes_a_garder.values():
+                colonnes_a_garder[col] = nom
 
-        # Si certaines colonnes standards existent sous d'autres dénominations dans le fichier brut
-        if 'N° Apt' not in colonnes_utiles.values():
-            for c in df_resultats.columns:
-                if 'appt' in c.lower() or 'appartement' in c.lower() or 'porte' in c.lower():
-                    colonnes_utiles[c] = 'N° Apt'
-        if 'Étage' not in colonnes_utiles.values():
-            for c in df_resultats.columns:
-                if 'etage' in c.lower():
-                    colonnes_utiles[c] = 'Étage'
+        df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
 
-        colonnes_finales_presentes = {k: v for k, v in colonnes_utiles.items() if k in df_resultats.columns}
-        df_affichage = df_resultats[list(colonnes_finales_presentes.keys())].rename(columns=colonnes_finales_presentes)
+        # Nettoyage de sécurité ultime anti-doublons de colonnes
+        df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
 
         # Filtrage par quartier
         if secteur != "Tous les secteurs":
@@ -96,7 +86,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse des profils et repérage des résidences secondaires
+        # Analyse des profils
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -139,10 +129,8 @@ if st.session_state.analyse_terminee:
         "✉️ 3. Publipostage & Impression"
     ])
     
-    # ONGLET 1 : BASE GLOBALE AVEC REPÈRES COMPLETS ET SÉLECTION
     with tab1:
-        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères pour le secteur : *{secteur}*.")
-        st.markdown("🎯 *Ce tableau intègre les étages, numéros d'appartements et structures pour vos boîtages.*")
+        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères.")
         
         event_selection = st.dataframe(
             st.session_state.df_affichage, 
@@ -154,29 +142,19 @@ if st.session_state.analyse_terminee:
         
         st.download_button("📥 Télécharger ce lot complet (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_copropriete.csv", mime='text/csv')
 
-    # ONGLET 2 : RÉSIDENCES SECONDAIRES
     with tab2:
         st.header("🏖️ Ciblage Résidences Secondaires & Turnover (5 ans)")
-        st.write("Biens localisés sur les grands axes de villégiature niçoise avec leurs repères d'étage et d'appartement.")
-        
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_sec = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Résidence Secondaire", na=False)]
-            
             if df_sec.empty:
                 st.info("ℹ️ Aucun bien ne correspond aux critères de résidence secondaire dans ce lot.")
             else:
                 st.success(f"🎯 **{len(df_sec)} biens** identifiés.")
                 st.dataframe(df_sec, use_container_width=True)
-                csv_sec = df_sec.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Télécharger le listing Résidences Secondaires (CSV)", data=csv_sec, file_name="listing_residences_secondaires.csv", mime='text/csv')
-        else:
-            st.warning("Données de profil non disponibles.")
+                st.download_button("📥 Télécharger le listing (CSV)", data=df_sec.to_csv(index=False).encode('utf-8'), file_name="listing_residences_secondaires.csv", mime='text/csv')
 
-    # ONGLET 3 : IMPRESSION ET COURRIERS
     with tab3:
         st.header("✉️ Publipostage Intelligent & Impression")
-        st.write("Générez vos courriers personnalisés avec les informations d'étage et de numéro d'appartement.")
-        
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
             
@@ -192,11 +170,8 @@ if st.session_state.analyse_terminee:
                 default=adresses_par_defaut
             )
             
-            if not adresses_selectionnees:
-                st.info("👈 Cochez des lignes dans le tableau de l'onglet 1 ou sélectionnez des adresses ci-dessus.")
-            else:
+            if adresses_selectionnees:
                 date_jour = datetime.now().strftime("%d/%m/%Y")
-                
                 if st.button("🖨️ Préparer l'impression groupée", type="primary"):
                     st.success("📄 Courriers prêts pour l'impression (utilisez Ctrl+P / Cmd+P).")
 
@@ -205,7 +180,6 @@ if st.session_state.analyse_terminee:
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Stratégie', '')
-                    
                     proprietaire = ligne_bien.get('Propriétaire / SCI', 'Propriétaire')
                     apt = ligne_bien.get('N° Apt', '')
                     lot = ligne_bien.get('N° Lot', '')
@@ -219,36 +193,12 @@ if st.session_state.analyse_terminee:
                     if lot: infos_repere.append(f"Lot n° {lot}")
                     str_reperage = " | ".join(infos_repere) if infos_repere else "Bien identifié"
 
-                    est_sci = False
-                    if isinstance(proprietaire, str) and ("SCI" in proprietaire.upper() or "SARL" in proprietaire.upper() or "SAS" in proprietaire.upper()):
-                        est_sci = True
-                            
-                    if est_sci:
-                        type_courrier = f"🏢 Courrier 4 : Investisseur / SCI ({proprietaire})"
-                        sujet = f"Anticipation fiscale et arbitrage de votre actif au {adresse}"
-                        corps = f"À l'attention de la société {proprietaire},\n\nConcernant l'actif détenu au {adresse} ({str_reperage}), dans le cadre des révisions liées au Projet de Finances (LMNP/SCI), anticiper l'évolution des amortissements est essentiel pour sécuriser la valeur de votre investissement."
-                    
-                    elif "Résidence Secondaire" in profil:
-                        type_courrier = "🏖️ Courrier Résidence Secondaire (~Cycle 5 ans)"
-                        sujet = f"Évolution du marché niçois et valorisation de votre pied-à-terre au {adresse}"
-                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}),\n\nPropriétaire de ce pied-à-terre depuis environ cinq ans, ce cap correspond souvent sur Nice à une réflexion sur l'arbitrage ou la valorisation patrimoniale avant d'entamer de nouveaux cycles de gestion."
-                    
-                    elif "Mandat Mûr" in profil:
-                        type_courrier = "🎯 Courrier 3 : Mandat Mûr (Reconquête / DPE 3-6 mois)"
-                        sujet = f"Stratégie de vente et positionnement de votre bien au {adresse}"
-                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}),\n\nEn analysant votre secteur, un DPE a été réalisé il y a quelques mois pour ce bien. Si la commercialisation stagne, c'est que les critères énergétiques exigent une défense technique irréprochable."
-                    
-                    else:
-                        type_courrier = "⏳ Courrier Passoire F/G Standard"
-                        sujet = f"Impact réglementaire et optimisation de votre bien au {adresse}"
-                        corps = f"Madame, Monsieur (Propriétaire - {str_reperage}),\n\nL'évolution de la Loi Climat impose des contraintes lourdes sur ce bien énergivore. Anticiper sa cession en l'état vous permet de purger votre plus-value sans subir les coûts de rénovation de copropriété."
-                    
                     st.markdown(f"### 📍 {adresse}")
-                    st.markdown(f"**Repères :** `{str_reperage}` | **Cible :** `{type_courrier}`")
+                    st.markdown(f"**Repères :** `{str_reperage}`")
                     st.text_area(
                         f"📄 Courrier publiposté :", 
-                        value=f"Nice, le {date_jour}\n\nObjet : {sujet}\n\n{corps}\n\nBien cordialement,\n\nNathalie Parra\n[Votre Agence / Coordonnées]", 
-                        height=240,
+                        value=f"Nice, le {date_jour}\n\nObjet : Stratégie patrimoniale au {adresse}\n\nMadame, Monsieur ({str_reperage}),\n\nNous nous permettons de vous contacter concernant votre bien...\n\nBien cordialement,\n\nNathalie Parra", 
+                        height=200,
                         key=f"courrier_{adresse}"
                     )
                     st.markdown("---")
