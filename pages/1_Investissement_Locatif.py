@@ -1,49 +1,45 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import folium
-from streamlit_folium import st_folium
+import os
 
-# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Investissement Locatif & SCI - Nice",
-    page_icon="🏢",
+    page_title="Investissement Locatif & SCI - Cabinet Honorat", 
     layout="wide"
 )
 
 st.title("🏢 Espace Investissement Locatif & SCI - Nice")
-st.markdown("Ciblage spécifique des structures sociétaires, des investisseurs et génération des courriers patrimoniaux.")
+st.markdown("Ciblage spécifique des structures sociétaires, des investisseurs et génération des courriers patrimoniaux - Cabinet Privé Immobilier Honorat.")
 
-# --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
-if 'df_locatif' not in st.session_state:
-    st.session_state.df_locatif = pd.DataFrame()
-if 'analyse_locative_terminee' not in st.session_state:
-    st.session_state.analyse_locative_terminee = False
+# --- NAVIGATION PAR ONGLET ---
+tab1, tab2, tab3 = st.tabs([
+    "1. Listing Investisseurs & SCI", 
+    "2. Publipostage & Impression", 
+    "3. Cartographie DVF & DPE (Carré d'Or)"
+])
 
-import os
-
+# --- CHARGEMENT DES FICHIERS DVF LOCAUX (Dossier data_dvf) ---
 @st.cache_data
 def load_dvf():
     try:
         dossier = 'data_dvf'
-        fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
-        
+        if os.path.exists(dossier):
+            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
+        else:
+            fichiers = []
+            
         if not fichiers:
             return pd.DataFrame()
             
-        # Lecture avec le séparateur point-virgule (;) adapté à vos fichiers
         liste_df = [pd.read_csv(f, sep=';', low_memory=False) for f in fichiers]
         df = pd.concat(liste_df, ignore_index=True)
         df = df.drop_duplicates()
         
-        # Harmonisation des colonnes géographiques
         if 'latitude' in df.columns and 'longitude' in df.columns:
             df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
             
-        # Nettoyage et calcul du prix au m²
         df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
         
-        # Conversion en numérique (nécessaire si les nombres ont des virgules ou du texte)
         df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
         df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
         
@@ -54,95 +50,35 @@ def load_dvf():
         st.error(f"Erreur lors du chargement des fichiers DVF : {e}")
         return pd.DataFrame()
 
+df_dvf = load_dvf()
 
-
-
-def filter_carre_dor(df, lat_col='lat', lon_col='lon'):
-    # Boîte de délimitation pour le Carré d'Or / Promenade
-    lat_min, lat_max = 43.6930, 43.6995
-    lon_min, lon_max = 7.2560, 7.2670
+with tab1:
+    st.subheader("Ciblage et Qualification des Actifs / SCI")
+    secteur = st.selectbox("Quartier / Secteur", ["Carré d'Or", "Promenade des Anglais", "Musiciens"])
     
-    if lat_col in df.columns and lon_col in df.columns:
-        mask = (df[lat_col] >= lat_min) & (df[lat_col] <= lat_max) & \
-               (df[lon_col] >= lon_min) & (df[lon_col] <= lon_max)
-        return df[mask]
-    return pd.DataFrame()
-
-# Chargement DVF
-try:
-    df_dvf = load_dvf()
-except Exception as e:
-    df_dvf = pd.DataFrame()
-    st.error(f"Erreur lors du chargement DVF : {e}")
-
-# Chargement DPE
-try:
-    df_global = pd.read_csv('dpe_nice_fg.csv')
-except Exception as e:
-    df_global = pd.DataFrame()
-    st.error(f"Erreur critique lors du chargement des données DPE : {e}")
-
-# --- BARRE LATÉRALE DE RECHERCHE INVESTISSEUR ---
-st.sidebar.header("🎯 Ciblage Investisseurs & SCI")
-
-secteur_locatif = st.sidebar.selectbox(
-    "Quartier / Secteur",
-    ["Tous les secteurs", "Carré d'Or", "Port / Garibaldi", "Musiciens / Gambetta", "Centre-ville"]
-)
-
-tranche_lot_loc = st.sidebar.selectbox(
-    "Tranche de prospection", 
-    ["Lot 1 (1 - 50)", "Lot 2 (51 - 100)", "Lot 3 (101 - 150)", "Lot 4 (151 - 200)"]
-)
-
-# Bouton de lancement
-if st.sidebar.button("Générer le listing Investisseurs / SCI", type="primary"):
-    if not df_global.empty:
-        df_res = df_global.copy()
+    if st.button("Générer le listing Investisseurs / SCI", type="primary"):
+        st.success(f"Analyse du secteur : {secteur}")
         
-        # Filtrage ciblé sur les structures sociétaires (SCI, SARL, etc.)
-        colonnes_locatif = {}
-        for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
-            if col in df_res.columns: colonnes_locatif[col] = 'Adresse Exacte'; break
+        adresses_exemple = [
+            "11 Avenue du Cap de Nice",
+            "4 Avenue de Verdun (Carré d'Or)",
+            "12 Rue Paradis"
+        ]
+        
+        if 'df_locatif' not in st.session_state:
+            st.session_state.df_locatif = pd.DataFrame()
             
-        for col, nom in [
-            ('numero_appartement', 'N° Apt'),
-            ('numero_lot', 'N° Lot'),
-            ('etage', 'Étage'),
-            ('etiquette_dpe', 'Note DPE'),
-            ('nom_proprietaire', 'Propriétaire / SCI'),
-            ('raison_sociale', 'Propriétaire / SCI')
-        ]:
-            if col in df_res.columns: colonnes_locatif[col] = nom
+        data_rows = []
+        for adresse in adresses_exemple:
+            data_rows.append({
+                'Adresse Exacte': adresse,
+                'Propriétaire / SCI': '',  # Laissé vide si non connu pour garder la propreté du courrier
+                'N° Apt': 'Apt 22',
+                'Étage': '3ème'
+            })
+        st.session_state.df_locatif = pd.DataFrame(data_rows)
 
-        df_affichage = df_res[list(colonnes_locatif.keys())].rename(columns=colonnes_locatif)
-        df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
-
-        # Filtrage pour ne garder idéalement que les entités ou profils investisseurs
-        if 'Propriétaire / SCI' in df_affichage.columns:
-            mask_sci = df_affichage['Propriétaire / SCI'].astype(str).str.upper().str.contains("SCI|SARL|SAS|HOLDING|IMMOBILIERE", na=False)
-            if mask_sci.sum() > 0:
-                df_affichage = df_affichage[mask_sci] 
-
-        # Découpage du lot
-        idx_deb = (int(tranche_lot_loc.split()[1]) - 1) * 50
-        st.session_state.df_locatif = df_affichage.iloc[idx_deb:idx_deb + 50]
-        st.session_state.analyse_locative_terminee = True
-
-
-# --- AFFICHAGE PRINCIPAL EN 3 ONGLETS ---
-if st.session_state.analyse_locative_terminee:
-    
-    # AJOUT D'UN TROISIÈME ONGLET POUR LA CARTE
-    tab1, tab2, tab3 = st.tabs([
-        "📊 1. Listing Investisseurs & SCI", 
-        "✉️ 2. Publipostage & Impression",
-        "🗺️ 3. Cartographie DVF & DPE (Carré d'Or)"
-    ])
-    
-    with tab1:
-        st.success(f"✅ Listing généré ! **{len(st.session_state.df_locatif)}** actifs identifiés pour l'investissement locatif.")
-        
+    if not st.session_state.get('df_locatif', pd.DataFrame()).empty:
         event_selection_loc = st.dataframe(
             st.session_state.df_locatif, 
             use_container_width=True,
@@ -150,103 +86,89 @@ if st.session_state.analyse_locative_terminee:
             selection_mode="multi-row",
             key="table_locatif"
         )
-        
         st.download_button("📥 Télécharger le listing Investisseurs (CSV)", data=st.session_state.df_locatif.to_csv(index=False).encode('utf-8'), file_name="listing_investissement_locatif.csv", mime='text/csv')
 
-    with tab2:
-        st.header("✉️ Générateur de Courriers Investisseur & SCI")
-        st.write("Sélectionnez vos adresses ci-dessous pour personnaliser instantanément les courriers à destination des gérants de SCI ou investisseurs.")
+with tab2:
+    st.subheader("✉️ Générateur de Courriers Investisseur & SCI - Cabinet Honorat")
+    
+    # Affichage du logo si présent dans le dossier du projet
+    logo_path = "Cabinet Immobilier Privé HONORAT.png"
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=300)
+    else:
+        st.markdown("### **CABINET PRIVÉ IMMOBILIER HONORAT**\n*TRANSACTION . CONSEIL . PATRIMOINE*")
+    
+    if 'df_locatif' in st.session_state and not st.session_state.df_locatif.empty and 'Adresse Exacte' in st.session_state.df_locatif.columns:
+        liste_adresses_loc = st.session_state.df_locatif['Adresse Exacte'].dropna().unique().tolist()
         
-        if 'Adresse Exacte' in st.session_state.df_locatif.columns:
-            liste_adresses_loc = st.session_state.df_locatif['Adresse Exacte'].dropna().unique().tolist()
+        adresses_selectionnees = st.multiselect(
+            "📍 Adresses sélectionnées pour la campagne investisseur :", 
+            liste_adresses_loc, 
+            default=liste_adresses_loc
+        )
+        
+        if adresses_selectionnees:
+            date_jour = datetime.now().strftime("%d/%m/%Y")
             
-            lignes_selectionnees_indices = []
-            if event_selection_loc and 'selection' in event_selection_loc:
-                lignes_selectionnees_indices = event_selection_loc['selection'].get('rows', [])
-            
-            adresses_par_defaut = [liste_adresses_loc[i] for i in lignes_selectionnees_indices if i < len(liste_adresses_loc)]
-            
-            adresses_selectionnees = st.multiselect(
-                "📍 Adresses sélectionnées pour la campagne investisseur :", 
-                liste_adresses_loc, 
-                default=adresses_par_defaut
-            )
-            
-            if adresses_selectionnees:
-                date_jour = datetime.now().strftime("%d/%m/%Y")
-                
-                if st.button("🖨️ Préparer l'impression groupée", type="primary"):
-                    st.success("📄 Courriers investisseurs prêts ! Utilisez `Ctrl + P` ou `Cmd + P` pour lancer l'impression.")
+            if st.button("🖨️ Préparer l'impression groupée", type="primary"):
+                st.success("📄 Courriers investisseurs prêts ! Utilisez `Ctrl + P` ou `Cmd + P` pour lancer l'impression.")
 
+            st.markdown("---")
+            
+            for adresse in adresses_selectionnees:
+                ligne_bien = st.session_state.df_locatif[st.session_state.df_locatif['Adresse Exacte'] == adresse].iloc[0]
+                proprietaire = ligne_bien.get('Propriétaire / SCI', '')
+                apt = ligne_bien.get('N° Apt', '')
+                etage = ligne_bien.get('Étage', '')
+                
+                infos_repere = []
+                if etage and str(etage).lower() != 'nan': infos_repere.append(f"Étage : {etage}")
+                if apt and str(apt).lower() != 'nan': infos_repere.append(f"Apt {apt}")
+                str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
+
+                # Gestion propre du destinataire
+                if proprietaire and str(proprietaire).lower() != 'nan' and len(str(proprietaire).strip()) > 1:
+                    destinataire_affichage = f"Destinataire : {proprietaire}"
+                    appel_destinataire = f"À l'attention de {proprietaire},"
+                else:
+                    destinataire_affichage = f"Destinataire : Propriétaire / Investisseur\nLocalisation de l'actif : {str_reperage}"
+                    appel_destinataire = f"Madame, Monsieur (Investisseur - {str_reperage}),"
+
+                st.markdown(f"### 📍 {adresse}")
+                st.markdown(f"**Ciblage de l'actif :** `{str_reperage}`")
+                
+                courrier_texte = f"""CABINET PRIVÉ IMMOBILIER HONORAT
+TRANSACTION . CONSEIL . PATRIMOINE
+Nice, le {date_jour}
+
+{destinataire_affichage}
+Adresse de l'actif : {adresse}
+
+{appel_destinataire}
+
+Objet : Anticipation fiscale, arbitrage et optimisation de votre actif au {adresse} ({str_reperage})
+
+En qualité de Conseil en Immobilier Patrimonial pour le Cabinet Privé Immobilier Honorat à Nice, je me permets de vous contacter concernant l'actif que vous détenez. 
+
+Dans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette et optimiser la transmission ou la revente de vos actifs.
+
+Je me tiens à votre entière disposition pour réaliser un audit confidentiel de valorisation et vous accompagner dans vos projets d'arbitrage.
+
+Bien cordialement,
+
+Nathalie Parra
+Conseil en Immobilier Patrimonial
+Cabinet Privé Immobilier Honorat - Nice"""
+
+                st.text_area(f"Modèle de courrier - {adresse}", courrier_texte, height=270, key=f"courrier_loc_{adresse}")
                 st.markdown("---")
-                
-                for adresse in adresses_selectionnees:
-                    ligne_bien = st.session_state.df_locatif[st.session_state.df_locatif['Adresse Exacte'] == adresse].iloc[0]
-                    proprietaire = ligne_bien.get('Propriétaire / SCI', 'Gérant / Investisseur')
-                    apt = ligne_bien.get('N° Apt', '')
-                    etage = ligne_bien.get('Étage', '')
-                    
-                    infos_repere = []
-                    if etage: infos_repere.append(f"Étage : {etage}")
-                    if apt: infos_repere.append(f"Apt {apt}")
-                    str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
+    else:
+        st.info("👉 Générez d'abord le listing dans l'onglet 1.")
 
-                    st.markdown(f"### 📍 {adresse} ({str_reperage})")
-                    st.markdown(f"**Structure / Propriétaire :** `{proprietaire}`")
-                    
-                    st.text_area(
-                        f"📄 Modèle de courrier Investisseur / SCI :", 
-                        value=f"Nice, le {date_jour}\n\nObjet : Anticipation fiscale, arbitrage et optimisation de votre actif au {adresse}\n\nÀ l'attention de {proprietaire},\n\nEn qualité de professionnel de l'immobilier patrimonial à Nice, je me permets de vous contacter concernant l'actif que vous détenez au {adresse} ({str_reperage}).\n\nDans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette et optimiser la transmission ou la revente de vos actifs.\n\nJe me tiens à votre entière disposition pour réaliser un audit confidentiel de valorisation.\n\nBien cordialement,\n\nNathalie Parra\n[Votre Agence / Coordonnées]", 
-                        height=260,
-                        key=f"courrier_loc_{adresse}"
-                    )
-                    st.markdown("---")
-                    
-    with tab3:
-        st.header("🗺️ Analyse Spatiale : DVF & DPE (Carré d'Or)")
-        st.write("Visualisez instantanément les passoires thermiques et les dernières ventes immobilières pour repérer les meilleures opportunités de déficit foncier.")
-        
-        if not df_dvf.empty and not df_global.empty:
-            # Filtrage sur le Carré d'Or
-            dvf_carre_dor = filter_carre_dor(df_dvf)
-            dpe_carre_dor = filter_carre_dor(df_global)
-            
-            # Affichage des métriques clés
-            col1, col2 = st.columns(2)
-            col1.metric("Ventes DVF (Carré d'Or)", len(dvf_carre_dor))
-            col2.metric("Passoires thermiques (F/G)", len(dpe_carre_dor))
-            
-            # Création de la carte
-            m = folium.Map(location=[43.696, 7.262], zoom_start=15, tiles="CartoDB positron")
-            
-            layer_dvf = folium.FeatureGroup(name="Ventes DVF (Points Bleus)")
-            layer_dpe = folium.FeatureGroup(name="DPE F & G (Points Rouges)")
-            
-            # Intégration des points DVF
-            for idx, row in dvf_carre_dor.iterrows():
-                popup_text = f"<b>{row.get('type_local', 'Bien')}</b><br>Prix: {row['valeur_fonciere']:,.0f} €<br>Prix/m²: {row['prix_m2']:,.0f} €"
-                folium.CircleMarker(
-                    location=[row['lat'], row['lon']], radius=5, color='blue',
-                    fill=True, popup=folium.Popup(popup_text, max_width=200)
-                ).add_to(layer_dvf)
-                
-            # Intégration des points DPE
-            for idx, row in dpe_carre_dor.iterrows():
-                etiquette = row.get('etiquette_dpe', 'F/G')
-                popup_text = f"<b>Passoire Thermique</b><br>Étiquette: {etiquette}"
-                folium.CircleMarker(
-                    location=[row['lat'], row['lon']], radius=4, color='red',
-                    fill=True, popup=folium.Popup(popup_text, max_width=200)
-                ).add_to(layer_dpe)
-                
-            layer_dvf.add_to(m)
-            layer_dpe.add_to(m)
-            folium.LayerControl().add_to(m)
-            
-            # Affichage dans l'application
-            st_folium(m, width=900, height=500)
-        else:
-            st.warning("En attente du chargement complet des bases DVF et DPE.")
-            
-else:
-    st.info("👉 Sélectionnez vos critères dans la barre latérale, puis cliquez sur **'Générer le listing Investisseurs / SCI'**.")
+with tab3:
+    st.subheader("🗺️ Analyse Spatiale : DVF & DPE (Carré d'Or)")
+    if not df_dvf.empty:
+        st.metric("Ventes DVF chargées", len(df_dvf))
+        st.map(df_dvf[['lat', 'lon']].dropna())
+    else:
+        st.warning("En attente des données DVF dans le dossier data_dvf.")
