@@ -78,7 +78,8 @@ def load_dpe():
 @st.cache_data
 def load_dvf():
     try:
-        dossier = 'data_dvf'
+        # CORRECTION ICI : le vrai nom de votre dossier sur GitHub
+        dossier = 'données_dvf'
         if os.path.exists(dossier):
             fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
             if fichiers:
@@ -311,14 +312,12 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
         if not df_dvf.empty:
             st.write("Base de données des Demandes de Valeurs Foncières (DVF) pour étayer vos avis de valeur avec des transactions réelles.")
             
-            # Préparation du tableau DVF pour un affichage propre
             colonnes_dvf = ['date_mutation', 'type_local', 'nom_commune', 'valeur_fonciere', 'surface_reelle_bati', 'prix_m2']
             colonnes_presentes = [col for col in colonnes_dvf if col in df_dvf.columns]
             
             if colonnes_presentes:
                 df_dvf_propre = df_dvf[colonnes_presentes].copy()
                 
-                # Formatage des chiffres pour la lisibilité
                 if 'valeur_fonciere' in df_dvf_propre.columns:
                     df_dvf_propre['valeur_fonciere'] = df_dvf_propre['valeur_fonciere'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
                 if 'surface_reelle_bati' in df_dvf_propre.columns:
@@ -326,7 +325,6 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                 if 'prix_m2' in df_dvf_propre.columns:
                     df_dvf_propre['prix_m2'] = df_dvf_propre['prix_m2'].apply(lambda x: f"{x:,.0f} €/m²".replace(',', ' '))
                 
-                # On renomme pour que ce soit plus joli à l'écran
                 df_dvf_propre = df_dvf_propre.rename(columns={
                     'date_mutation': 'Date Acte',
                     'type_local': 'Type de Bien',
@@ -343,4 +341,4 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
             if 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
                 st.map(df_dvf[['lat', 'lon']].dropna())
         else:
-            st.info("ℹ️ Les données DVF n'ont pas pu être chargées. Assurez-vous que vos fichiers .csv sont dans le dossier 'data_dvf'.")
+            st.info("ℹ️ Les données DVF n'ont pas pu être chargées. Assurez-vous que vos fichiers .csv sont dans le dossier 'données_dvf'.")
