@@ -63,37 +63,23 @@ def enrichir_avec_sirene(adresse_str):
         pass
     return None
 
-# --- CHARGEMENT DES FICHIERS ---
+# --- CHARGEMENT DPE ---
 @st.cache_data
 def load_data():
     df_dvf = pd.DataFrame()
     df_dpe = pd.DataFrame()
     try:
-        dossier = 'data_dvf'
-        if os.path.exists(dossier):
-            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
-            if fichiers:
-                liste_df = [pd.read_csv(f, sep=';', low_memory=False) for f in fichiers]
-                df_dvf = pd.concat(liste_df, ignore_index=True)
-                if 'latitude' in df_dvf.columns:
-                    df_dvf = df_dvf.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
-    except:
-        pass
-
-    try:
         df_dpe = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
     except:
         pass
-        
     return df_dvf, df_dpe
 
 df_dvf, df_dpe = load_data()
 
 # --- NAVIGATION PAR ONGLET ---
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2 = st.tabs([
     "📊 1. Radar des SCI & Investisseurs", 
-    "✉️ 2. Publipostage Stratégique", 
-    "🗺️ 3. Cartographie (DVF)"
+    "✉️ 2. Publipostage Stratégique"
 ])
 
 with tab1:
@@ -117,11 +103,11 @@ with tab1:
                          pattern = '|'.join(mots_cles)
                          df_recherche = df_recherche[df_recherche[col_adresse].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-                # On scanne un lot pour trouver des SCI
+                # On scanne un lot de 30 adresses pour trouver des SCI (pour ne pas bloquer l'API)
                 adresses_a_tester = df_recherche[col_adresse].dropna().unique()[:30]
                 data_rows = []
                 
-                with st.spinner("Analyse INPI/BODACC en cours..."):
+                with st.spinner("Analyse INPI/BODACC en cours... (Recherche de SCI)"):
                     for adresse in adresses_a_tester:
                         infos = enrichir_avec_sirene(adresse)
                         if infos: 
@@ -139,7 +125,7 @@ with tab1:
                 
                 st.session_state.df_locatif = pd.DataFrame(data_rows)
                 if st.session_state.df_locatif.empty:
-                    st.warning("Aucune structure sociétaire n'a été détectée sur cet échantillon.")
+                    st.warning("Aucune structure sociétaire n'a été détectée sur cet échantillon d'adresses.")
             else:
                 st.error("Colonne d'adresse introuvable.")
         else:
@@ -177,7 +163,7 @@ with tab2:
                 str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
 
                 # En-tête ciblé SCI
-                en_tete = f"Destinataire : {structure}\nSiège social : {siege}\n"
+                en_tete = f"Destinataire : {structure}\nSiège social : {siege}"
                 appel = f"À l'attention de {gerant}," if gerant else "À l'attention de la Gérance,"
                 
                 # Stratégie textuelle adaptée
@@ -191,6 +177,7 @@ with tab2:
                 courrier_texte = f"""Nice, le {date_jour}
 
 {en_tete}
+Adresse de l'actif concerné : {adresse}
 
 {appel}
 
@@ -217,10 +204,3 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                 if os.path.exists(logo_path):
                     st.image(logo_path, width=200)
                 st.markdown("---")
-
-with tab3:
-    st.subheader("🗺️ Cartographie des Ventes Récentes (DVF)")
-    if not df_dvf.empty:
-        st.map(df_dvf[['lat', 'lon']].dropna())
-    else:
-        st.info("Placez vos fichiers DVF dans le dossier 'data_dvf' pour afficher la carte.")
