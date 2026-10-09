@@ -4,7 +4,13 @@ from datetime import datetime
 import os
 import requests
 
-# --- CONFIGURATION DE LA PAGE ---
+# --- CONFIGURATION DU MENU ET DE LA NAVIGATION ---
+# Configuration de la page principale et des titres du menu
+page_1 = st.Page("Accueil.py", title="Stratégie 1 : DPE & Cycles", icon="🏢", default=True)
+page_2 = st.Page("pages/1_Strategie_2.py", title="Stratégie 2 : SCI & Alertes", icon="💼")
+
+pg = st.navigation([page_1, page_2])
+
 st.set_page_config(
     page_title="Stratégie 1 - Cabinet Honorat",
     page_icon="🏢",
@@ -20,15 +26,9 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
-# --- FONCTIONS DE NETTOYAGE ---
-def est_vide(val):
-    if pd.isna(val): 
-        return True
-    val_str = str(val).strip().lower()
-    return val_str in ['nan', 'none', 'null', '', '<na>']
-
+# --- FONCTION DE NETTOYAGE DES NUMÉROS ---
 def formater_numero(val):
-    if est_vide(val):
+    if pd.isna(val) or str(val).strip().lower() in ['nan', 'none', 'null', '', '<na>']:
         return ''
     val_str = str(val).strip()
     if val_str.endswith('.0'):
@@ -148,20 +148,21 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- FILTRE ROBUSTE POUR ÉVITER LE VALUEERROR ---
+        # --- FILTRE ROBUSTE ET VECTORIEL SANS APPLY (FIN DU VALUEERROR) ---
         has_apt = 'N° Apt' in df_affichage.columns
         has_etage = 'Étage' in df_affichage.columns
-        
+        valeurs_vides = ['nan', 'none', 'null', '', '<na>']
+
         if has_apt and has_etage:
-            mask_apt_ok = ~df_affichage['N° Apt'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
-            mask_etage_ok = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
-            df_affichage = df_affichage[mask_apt_ok | mask_etage_ok]
+            mask_apt_valide = ~df_affichage['N° Apt'].astype(str).str.strip().str.lower().isin(valeurs_vides)
+            mask_etage_valide = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(valeurs_vides)
+            df_affichage = df_affichage[mask_apt_valide | mask_etage_valide]
         elif has_apt:
-            mask_apt_ok = ~df_affichage['N° Apt'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
-            df_affichage = df_affichage[mask_apt_ok]
+            mask_apt_valide = ~df_affichage['N° Apt'].astype(str).str.strip().str.lower().isin(valeurs_vides)
+            df_affichage = df_affichage[mask_apt_valide]
         elif has_etage:
-            mask_etage_ok = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
-            df_affichage = df_affichage[mask_etage_ok]
+            mask_etage_valide = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(valeurs_vides)
+            df_affichage = df_affichage[mask_etage_valide]
 
         # Filtre de secteur
         if secteur != "Tous les secteurs":
