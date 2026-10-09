@@ -148,13 +148,14 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        if 'N° Apt' in df_affichage.columns and 'Étage' in df_affichage.columns:
-            mask_valide = df_affichage.apply(lambda row: not (est_vide(row.get('N° Apt')) and est_vide(row.get('Étage'))), axis=1)
-            df_affichage = df_affichage[mask_valide]
-        elif 'N° Apt' in df_affichage.columns:
-            df_affichage = df_affichage[df_affichage.apply(lambda row: not est_vide(row.get('N° Apt')), axis=1)]
-        elif 'Étage' in df_affichage.columns:
-            df_affichage = df_affichage[df_affichage.apply(lambda row: not est_vide(row.get('Étage')), axis=1)]
+        # --- CORRECTION DE L'ERREUR ICI ---
+        # On sécurise la fonction pour s'assurer que la ligne ne plante pas si une info manque
+        def est_bien_routable(row):
+            apt_vide = est_vide(row.get('N° Apt')) if 'N° Apt' in df_affichage.columns else True
+            etage_vide = est_vide(row.get('Étage')) if 'Étage' in df_affichage.columns else True
+            return not (apt_vide and etage_vide)
+            
+        df_affichage = df_affichage[df_affichage.apply(est_bien_routable, axis=1)]
 
         # Filtre de secteur
         if secteur != "Tous les secteurs":
