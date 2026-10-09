@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import requests
 from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
@@ -10,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et Publipostage.")
+st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et Publipostage enrichi SIRENE.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -18,19 +19,54 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
-# Chargement unique du fichier DPE existant
+# --- FONCTION DE CROISEMENT OPEN DATA SIRENE ---
+@st.cache_data
+def enrichir_avec_sirene(adresse_str):
+    """
+    Interroge l'API Open Data officielle (Recherche Entreprises / SIRENE)
+    pour récupérer la SCI, le gérant et le siège social à partir de l'adresse.
+    """
+    try:
+        url = f"https://recherche-entreprises.api.gouv.fr/recherche?q={adresse_str}&per_page=1"
+        reponse = requests.get(url, timeout=3)
+        if reponse.status_code == 200:
+            data = reponse.json()
+            resultats = data.get('results', [])
+            if resultats:
+                entite = resultats[0]
+                nom = entite.get('nom_raison_sociale', 'Propriétaire / Investisseur')
+                siren = entite.get('siren', '')
+                
+                # Récupération du gérant
+                dirigeants = entite.get('dirigeants', [])
+                nom_gerant = "Gérant"
+                if dirigeants:
+                    prenom = dirigeants[0].get('prenoms', '')
+                    patronyme = dirigeants[0].get('nom', '')
+                    nom_gerant = f"{prenom} {patronyme}".strip()
+                
+                siege = entite.get('siege', {})
+                adresse_siege = siege.get('adresse', adresse_str)
+                
+                return {
+                    'structure': nom,
+                    'siren': siren,
+                    'gerant': nom_gerant,
+                    'siege': adresse_siege
+                }
+    except Exception:
+        pass
+        
+    return {
+        'structure': 'Propriétaire / Investisseur',
+        'siren': 'Non renseigné',
+        'gerant': 'Gérant',
+        'siege': adresse_str
+    }
+
+# Chargement propre du fichier DPE existant (sans brouillon)
 try:
     df_global = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
-    
-    # 🔍 AJOUTEZ CETTE LIGNE ICI POUR VOIR LES COLONNES SUR L'ÉCRAN :
-    st.write("🔍 **Colonnes présentes dans votre fichier DPE :**", list(df_global.columns))
-
-except Exception as e:
-    df_global = pd.DataFrame()
-    st.error(f"Erreur critique lors du chargement du fichier DPE : {e}")
-# Chargement unique du fichier DPE existant
-try:
-    df_global = pd.read_csv('dpe_nice_fg.csv')
 except Exception as e:
     df_global = pd.DataFrame()
     st.error(f"Erreur critique lors du chargement du fichier DPE : {e}")
@@ -56,9 +92,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
-        # Mappage intelligent pour récupérer les adresses et repères de copropriété
         colonnes_a_garder = {}
-        
         for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
             if col in df_resultats.columns:
                 colonnes_a_garder[col] = 'Adresse Exacte'
@@ -78,8 +112,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 colonnes_a_garder[col] = 'Note DPE'
             elif 'date' in col_lower and 'dpe' in col_lower:
                 colonnes_a_garder[col] = 'Date DPE'
-            elif 'proprietaire' in col_lower or 'raison_sociale' in col_lower:
-                colonnes_a_garder[col] = 'Propriétaire / SCI'
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
@@ -99,7 +131,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse temporelle basée sur le DPE (Ciblage ~5 ans et F/G)
+        # Analyse temporelle basée sur le DPE
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -123,11 +155,9 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                     
             df_affichage['Profil & Stratégie'] = statuts_mandats
 
-        # Filtrage selon l'objectif choisi dans le menu latéral
         if objectif == "Cycle de détention ~5 ans (DPE)" and 'Profil & Stratégie' in df_affichage.columns:
             df_affichage = df_affichage[df_affichage['Profil & Stratégie'].str.contains("Cycle ~5 ans", na=False)]
 
-        # Découpage du lot (50 par 50)
         index_debut = (int(tranche_mois.split()[1]) - 1) * 50
         df_affichage = df_affichage.iloc[index_debut:index_debut + 50]
         
@@ -171,7 +201,7 @@ if st.session_state.analyse_terminee:
                 st.download_button("📥 Télécharger le listing Cycle 5 ans (CSV)", data=df_cycle.to_csv(index=False).encode('utf-8'), file_name="cycle_5ans_dpe.csv", mime='text/csv')
 
     with tab3:
-        st.header("✉️ Publipostage Intelligent & Impression")
+        st.header("✉️ Publipostage Intelligent & Impression (Enrichi SIRENE)")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
@@ -199,7 +229,13 @@ if st.session_state.analyse_terminee:
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Stratégie', '')
-                    proprietaire = ligne_bien.get('Propriétaire / SCI', 'Propriétaire')
+                    
+                    # Interrogation Open Data SIRENE à la volée pour l'adresse
+                    infos_sirene = enrichir_avec_sirene(adresse)
+                    structure = infos_sirene['structure']
+                    gerant = infos_sirene['gerant']
+                    siege = infos_sirene['siege']
+                    siren = infos_sirene['siren']
                     
                     apt = ligne_bien.get('N° Apt', '')
                     lot = ligne_bien.get('N° Lot', '')
@@ -214,11 +250,13 @@ if st.session_state.analyse_terminee:
                     str_reperage = " | ".join(infos_repere) if infos_repere else "Bien identifié"
 
                     st.markdown(f"### 📍 {adresse}")
-                    st.markdown(f"**Repères :** `{str_reperage}` | **Profil :** `{profil}`")
+                    st.markdown(f"**Structure :** `{structure}` (Gérant : `{gerant}` - SIREN : `{siren}`)")
+                    st.markdown(f"**Repères :** `{str_reperage}` | **Siège social :** `{siege}`")
+                    
                     st.text_area(
                         f"📄 Modèle de courrier :", 
-                        value=f"Nice, le {date_jour}\n\nObjet : Évolution de votre patrimoine au {adresse}\n\nMadame, Monsieur ({str_reperage}),\n\nNous nous permettons de vous contacter concernant votre bien...\n\nBien cordialement,\n\nNathalie Parra", 
-                        height=200,
+                        value=f"Nice, le {date_jour}\n\nDestinataire : {structure}\nSiège social : {siege}\nÀ l'attention de {gerant},\n\nObjet : Anticipation fiscale, arbitrage et optimisation de votre actif au {adresse}\n\nMadame, Monsieur ({str_reperage}),\n\nEn qualité de professionnel de l'immobilier patrimonial à Nice, je me permets de vous contacter concernant l'actif que vous détenez. Dans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette.\n\nJe me tiens à votre entière disposition pour un échange confidentiel.\n\nBien cordialement,\n\nNathalie Parra", 
+                        height=220,
                         key=f"courrier_{adresse}"
                     )
                     st.markdown("---")
