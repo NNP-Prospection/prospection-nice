@@ -222,5 +222,3 @@ if st.session_state.analyse_locative_terminee:
             
 else:
     st.info("👉 Sélectionnez vos critères dans la barre latérale, puis cliquez sur **'Générer le listing Investisseurs / SCI'**.")
-folium
-streamlit-folium
