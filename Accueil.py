@@ -6,13 +6,13 @@ import requests
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Espace de Prospection - Cabinet Honorat",
-    page_icon="🏠",
+    page_title="Stratégie 1 - Cabinet Honorat",
+    page_icon="🏢",
     layout="wide"
 )
 
-st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et approche SCI/BODACC.")
+st.title("🏢 Stratégie 1 : Passoires F/G & Cycle de Détention (5 ans)")
+st.markdown("Approche par l'actif : Identification des urgences énergétiques (DPE), des opportunités d'arbitrage (~5 ans) et analyse DVF.")
 
 # --- INITIALISATION DE LA MÉMOIRE ---
 if 'df_affichage' not in st.session_state:
@@ -20,14 +20,13 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
-# --- FONCTION POUR IDENTIFIER LES VIDES ABSOLUS ---
+# --- FONCTIONS DE NETTOYAGE ---
 def est_vide(val):
     if pd.isna(val): 
         return True
     val_str = str(val).strip().lower()
     return val_str in ['nan', 'none', 'null', '', '<na>']
 
-# --- FONCTION POUR NETTOYER LES .0 ---
 def formater_numero(val):
     if est_vide(val):
         return ''
@@ -36,12 +35,12 @@ def formater_numero(val):
         return val_str[:-2]
     return val_str
 
-# --- FONCTION API SIRENE ENRICHIE (INPI & BODACC) ---
-@st.cache_data
+# --- FONCTION API SIRENE (INPI & BODACC) ---
+@st.cache_data(show_spinner=False)
 def enrichir_avec_sirene(adresse_str):
     try:
-        url = f"https://recherche-entreprises.api.gouv.fr/recherche?q={adresse_str}&per_page=1"
-        reponse = requests.get(url, timeout=3)
+        url = "https://recherche-entreprises.api.gouv.fr/recherche"
+        reponse = requests.get(url, params={'q': adresse_str, 'per_page': 1}, timeout=3)
         if reponse.status_code == 200:
             data = reponse.json()
             resultats = data.get('results', [])
@@ -50,15 +49,11 @@ def enrichir_avec_sirene(adresse_str):
                 nom = entite.get('nom_raison_sociale', '')
                 siren = entite.get('siren', '')
                 
-                # Récupération INPI (Dirigeants / Bénéficiaires)
                 dirigeants = entite.get('dirigeants', [])
                 nom_gerant = ""
                 if dirigeants:
-                    prenom = dirigeants[0].get('prenoms', '')
-                    patronyme = dirigeants[0].get('nom', '')
-                    nom_gerant = f"{prenom} {patronyme}".strip()
+                    nom_gerant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip()
                 
-                # Détection BODACC / Statut de l'entreprise
                 etat_admin = entite.get('etat_administratif', 'A') 
                 alerte_bodacc = "Actif"
                 if etat_admin == 'C':
@@ -78,30 +73,55 @@ def enrichir_avec_sirene(adresse_str):
         pass
     return None
 
-# --- CHARGEMENT DPE ---
-try:
-    df_global = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
-except Exception as e:
-    df_global = pd.DataFrame()
-    st.error("Erreur critique lors du chargement du fichier DPE.")
+# --- CHARGEMENT DPE & DVF ---
+@st.cache_data
+def load_dpe():
+    try:
+        return pd.read_csv('dpe_nice_fg.csv', low_memory=False)
+    except:
+        return pd.DataFrame()
+
+@st.cache_data
+def load_dvf():
+    try:
+        dossier = 'data_dvf'
+        if os.path.exists(dossier):
+            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
+            if fichiers:
+                liste_df = [pd.read_csv(os.path.join(dossier, f), sep=';', low_memory=False) for f in fichiers]
+                df = pd.concat(liste_df, ignore_index=True).drop_duplicates()
+                if 'latitude' in df.columns:
+                    df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+                if 'valeur_fonciere' in df.columns and 'surface_reelle_bati' in df.columns and 'lat' in df.columns:
+                    df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
+                    df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
+                    df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
+                    df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
+                    df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
+                return df
+        return pd.DataFrame()
+    except:
+        return pd.DataFrame()
+
+df_global = load_dpe()
+df_dvf = load_dvf()
 
 # --- BARRE LATÉRALE DE RECHERCHE ---
 st.sidebar.header("🎯 Critères de ciblage")
 
 objectif = st.sidebar.selectbox(
-    "Objectif de prospection",
-    ["Passoires Énergétiques (F & G) - Standard", "Cycle de détention ~5 ans (DPE)"]
+    "Axe de prospection",
+    ["Urgence Réglementaire (Passoires F & G)", "Arbitrage Patrimonial (Cycle ~5 ans)"]
 )
 
 secteur = st.sidebar.selectbox(
-    "Quartier / Secteur à Nice",
+    "Quartier / Secteur",
     ["Tous les secteurs", "Carré d'Or", "Promenade des Anglais", "Port / Garibaldi", "Mont Boron", "Musiciens / Gambetta", "Centre-ville"]
 )
 
-liste_lots = ["Lot 1 (1 - 50)", "Lot 2 (51 - 100)", "Lot 3 (101 - 150)", "Lot 4 (151 - 200)", "Lot 5 (201 - 250)"]
-tranche_mois = st.sidebar.selectbox("Choisir le lot de prospection", liste_lots)
+tranche_mois = st.sidebar.selectbox("Choisir le lot à analyser", ["Lot 1 (1 - 50)", "Lot 2 (51 - 100)", "Lot 3 (101 - 150)", "Lot 4 (151 - 200)", "Lot 5 (201 - 250)"])
 
-# --- BOUTON DE LANCEMENT ---
+# --- LANCEMENT ---
 if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
@@ -120,29 +140,23 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
             elif 'batiment' in c or 'bat' in c: colonnes_a_garder[col] = 'Bâtiment'
             elif 'etiquette' in c and 'dpe' in c: colonnes_a_garder[col] = 'Note DPE'
             elif 'date' in c and 'dpe' in c: colonnes_a_garder[col] = 'Date DPE'
-            elif 'proprietaire' in c or 'raison_sociale' in c: colonnes_a_garder[col] = 'Propriétaire / SCI'
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
-        df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
-
-        # --- NETTOYAGE DES DOUBLONS ---
+        
+        # Filtres de qualité stricts
         colonnes_doublons = [col for col in ['Adresse Exacte', 'N° Apt', 'Étage', 'Date DPE'] if col in df_affichage.columns]
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- EXCLUSION 100% BLINDÉE DES BIENS INEXPLOITABLES (SANS APT ET SANS ÉTAGE) ---
         if 'N° Apt' in df_affichage.columns and 'Étage' in df_affichage.columns:
-            # On ne garde la ligne QUE SI l'apt n'est pas vide OU l'étage n'est pas vide
             mask_valide = df_affichage.apply(lambda row: not (est_vide(row.get('N° Apt')) and est_vide(row.get('Étage'))), axis=1)
             df_affichage = df_affichage[mask_valide]
         elif 'N° Apt' in df_affichage.columns:
-            mask_valide = df_affichage.apply(lambda row: not est_vide(row.get('N° Apt')), axis=1)
-            df_affichage = df_affichage[mask_valide]
+            df_affichage = df_affichage[df_affichage.apply(lambda row: not est_vide(row.get('N° Apt')), axis=1)]
         elif 'Étage' in df_affichage.columns:
-            mask_valide = df_affichage.apply(lambda row: not est_vide(row.get('Étage')), axis=1)
-            df_affichage = df_affichage[mask_valide]
+            df_affichage = df_affichage[df_affichage.apply(lambda row: not est_vide(row.get('Étage')), axis=1)]
 
-        # --- Filtrage Secteur ---
+        # Filtre de secteur
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt"],
@@ -157,7 +171,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # --- Analyse temporelle ---
+        # Analyse Cycle 5 ans
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -180,7 +194,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                     
             df_affichage['Profil & Stratégie'] = statuts_mandats
 
-        if objectif == "Cycle de détention ~5 ans (DPE)" and 'Profil & Stratégie' in df_affichage.columns:
+        if objectif == "Arbitrage Patrimonial (Cycle ~5 ans)" and 'Profil & Stratégie' in df_affichage.columns:
             df_affichage = df_affichage[df_affichage['Profil & Stratégie'].str.contains("Cycle ~5 ans", na=False)]
 
         index_debut = (int(tranche_mois.split()[1]) - 1) * 50
@@ -190,35 +204,27 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
 # --- AFFICHAGE ---
 if st.session_state.analyse_terminee:
     
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 1. Listing & Repères", 
         "🏖️ 2. Cycle ~5 ans (DPE)", 
-        "✉️ 3. Publipostage & Impression"
+        "✉️ 3. Publipostage & Impression",
+        "🗺️ 4. Cartographie (DVF)"
     ])
     
     with tab1:
-        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés (exploitable pour publipostage).")
-        
-        event_selection = st.dataframe(
-            st.session_state.df_affichage, 
-            use_container_width=True, 
-            on_select="rerun", 
-            selection_mode="multi-row",
-            hide_index=True
-        )
-        st.download_button("📥 Télécharger (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_prospection.csv", mime='text/csv')
+        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens routables ciblés.")
+        event_selection = st.dataframe(st.session_state.df_affichage, use_container_width=True, on_select="rerun", selection_mode="multi-row", hide_index=True)
+        st.download_button("📥 Télécharger (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_dpe.csv", mime='text/csv')
 
     with tab2:
-        st.header("🏖️ Cycle de détention ~5 ans")
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_cycle = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Cycle ~5 ans", na=False)]
             if not df_cycle.empty:
                 st.dataframe(df_cycle, use_container_width=True, hide_index=True)
             else:
-                st.info("ℹ️ Aucun bien ne correspond à ce critère dans ce lot.")
+                st.info("ℹ️ Aucun bien ne correspond au Cycle de 5 ans dans ce lot.")
 
     with tab3:
-        st.header("✉️ Publipostage Cible & Impression")
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
             lignes_sel = event_selection['selection'].get('rows', []) if event_selection and 'selection' in event_selection else []
@@ -234,7 +240,6 @@ if st.session_state.analyse_terminee:
                 
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
-                    
                     infos_sirene = enrichir_avec_sirene(adresse)
                     
                     apt = formater_numero(ligne_bien.get('N° Apt', ''))
@@ -261,7 +266,7 @@ if st.session_state.analyse_terminee:
                         appel_destinataire = f"À l'attention de {infos_sirene['gerant'] if infos_sirene['gerant'] else 'la Gérance'},"
                         
                         if "CESSATION" in statut:
-                            paragraphe_strategique = "Ayant pris connaissance des récentes évolutions concernant votre structure (cessation / procédure), je tenais à vous proposer une estimation confidentielle et rapide de vos actifs immobiliers afin de faciliter vos démarches d'arbitrage ou de restructuration dans les meilleures conditions."
+                            paragraphe_strategique = "Ayant pris connaissance des récentes évolutions concernant votre structure (cessation / procédure), je tenais à vous proposer une estimation confidentielle et rapide de vos actifs immobiliers afin de faciliter vos démarches d'arbitrage ou de restructuration."
 
                     st.markdown(f"### 📍 {adresse} - Ciblage : `{str_reperage}`")
                     
@@ -293,3 +298,11 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                     if os.path.exists(logo_path):
                         st.image(logo_path, width=200)
                     st.markdown("---")
+
+    with tab4:
+        st.subheader("🗺️ Marché Local (Données DVF)")
+        if not df_dvf.empty and 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
+            st.write("Vue d'ensemble des dernières transactions actées pour affiner vos audits.")
+            st.map(df_dvf[['lat', 'lon']].dropna())
+        else:
+            st.info("Placez vos fichiers DVF (.csv) dans le dossier 'data_dvf' pour afficher la carte.")
