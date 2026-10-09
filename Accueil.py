@@ -86,17 +86,15 @@ def load_dvf():
                 break
                 
         if not dossier:
-            return pd.DataFrame() # Retourne vide si aucun dossier trouvé
+            return pd.DataFrame() 
             
-        # Accepte les CSV et les TXT
         fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv') or f.endswith('.txt')]
         if not fichiers:
-            return pd.DataFrame() # Retourne vide si dossier trouvé mais vide
+            return pd.DataFrame() 
             
         liste_df = []
         for f in fichiers:
             try:
-                # Test de plusieurs séparateurs utilisés par le gouvernement
                 df_temp = pd.read_csv(f, sep=';', low_memory=False)
                 if len(df_temp.columns) < 3:
                     df_temp = pd.read_csv(f, sep=',', low_memory=False)
@@ -118,7 +116,7 @@ def load_dvf():
             df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
             df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
             df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
-            df = df[df['surface_reelle_bati'] > 0] # Sécurité division par zéro
+            df = df[df['surface_reelle_bati'] > 0] 
             df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
             df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
         return df
@@ -339,7 +337,17 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
         if not df_dvf.empty:
             st.write("Base de données des Demandes de Valeurs Foncières (DVF) pour étayer vos avis de valeur avec des transactions réelles.")
             
-            colonnes_dvf = ['date_mutation', 'type_local', 'nom_commune', 'valeur_fonciere', 'surface_reelle_bati', 'prix_m2']
+            # --- CRÉATION DE L'ADRESSE COMPLÈTE ---
+            if 'adresse_nom_voie' in df_dvf.columns:
+                num = df_dvf.get('adresse_numero_voie', pd.Series(dtype=str)).fillna('').astype(str).str.replace('.0', '', regex=False)
+                voie = df_dvf['adresse_nom_voie'].fillna('')
+                df_dvf['Adresse Vente'] = (num + " " + voie).str.strip()
+            elif 'adresse' in df_dvf.columns:
+                df_dvf['Adresse Vente'] = df_dvf['adresse']
+            else:
+                df_dvf['Adresse Vente'] = "Adresse non disponible"
+
+            colonnes_dvf = ['date_mutation', 'Adresse Vente', 'type_local', 'nom_commune', 'valeur_fonciere', 'surface_reelle_bati', 'prix_m2']
             colonnes_presentes = [col for col in colonnes_dvf if col in df_dvf.columns]
             
             if colonnes_presentes:
@@ -354,6 +362,7 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                 
                 df_dvf_propre = df_dvf_propre.rename(columns={
                     'date_mutation': 'Date Acte',
+                    'Adresse Vente': 'Adresse',
                     'type_local': 'Type de Bien',
                     'nom_commune': 'Commune',
                     'valeur_fonciere': 'Prix de Vente',
@@ -368,7 +377,6 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
             if 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
                 st.map(df_dvf[['lat', 'lon']].dropna())
         else:
-            # --- OUTIL DE DIAGNOSTIC AUTOMATIQUE ---
             dossiers = [d for d in os.listdir('.') if os.path.isdir(d) and not d.startswith('.')]
             dossier_dvf = next((d for d in dossiers if 'dvf' in d.lower()), "Aucun dossier trouvé")
             fichiers_trouves = os.listdir(dossier_dvf) if dossier_dvf != "Aucun dossier trouvé" else []
