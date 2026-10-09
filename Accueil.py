@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
-import requests
 from datetime import datetime
+import os
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Espace de Prospection - Nice",
+    page_title="Espace de Prospection - Cabinet Privé Immobilier Honorat",
     page_icon="🏠",
     layout="wide"
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et Publipostage enrichi SIRENE.")
+st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et Publipostage - Cabinet Privé Immobilier Honorat.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -19,52 +19,7 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
-# --- FONCTION DE CROISEMENT OPEN DATA SIRENE ---
-@st.cache_data
-def enrichir_avec_sirene(adresse_str):
-    """
-    Interroge l'API Open Data officielle (Recherche Entreprises / SIRENE)
-    pour récupérer la SCI, le gérant et le siège social à partir de l'adresse.
-    """
-    try:
-        url = f"https://recherche-entreprises.api.gouv.fr/recherche?q={adresse_str}&per_page=1"
-        reponse = requests.get(url, timeout=3)
-        if reponse.status_code == 200:
-            data = reponse.json()
-            resultats = data.get('results', [])
-            if resultats:
-                entite = resultats[0]
-                nom = entite.get('nom_raison_sociale', 'Propriétaire / Investisseur')
-                siren = entite.get('siren', '')
-                
-                # Récupération du gérant
-                dirigeants = entite.get('dirigeants', [])
-                nom_gerant = "Gérant"
-                if dirigeants:
-                    prenom = dirigeants[0].get('prenoms', '')
-                    patronyme = dirigeants[0].get('nom', '')
-                    nom_gerant = f"{prenom} {patronyme}".strip()
-                
-                siege = entite.get('siege', {})
-                adresse_siege = siege.get('adresse', adresse_str)
-                
-                return {
-                    'structure': nom,
-                    'siren': siren,
-                    'gerant': nom_gerant,
-                    'siege': adresse_siege
-                }
-    except Exception:
-        pass
-        
-    return {
-        'structure': 'Propriétaire / Investisseur',
-        'siren': 'Non renseigné',
-        'gerant': 'Gérant',
-        'siege': adresse_str
-    }
-
-# Chargement propre du fichier DPE existant (sans brouillon)
+# Chargement propre du fichier DPE existant
 try:
     df_global = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
 except Exception as e:
@@ -112,6 +67,8 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 colonnes_a_garder[col] = 'Note DPE'
             elif 'date' in col_lower and 'dpe' in col_lower:
                 colonnes_a_garder[col] = 'Date DPE'
+            elif 'proprietaire' in col_lower or 'raison_sociale' in col_lower:
+                colonnes_a_garder[col] = 'Propriétaire / SCI'
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
@@ -201,7 +158,14 @@ if st.session_state.analyse_terminee:
                 st.download_button("📥 Télécharger le listing Cycle 5 ans (CSV)", data=df_cycle.to_csv(index=False).encode('utf-8'), file_name="cycle_5ans_dpe.csv", mime='text/csv')
 
     with tab3:
-        st.header("✉️ Publipostage Intelligent & Impression (Enrichi SIRENE)")
+        st.header("✉️ Publipostage Cible & Impression - Cabinet Privé Immobilier HONORAT")
+        
+        # Affichage du logo si présent dans le dossier du projet
+        logo_path = "Cabinet Immobilier Privé HONORAT.png"
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=300)
+        else:
+            st.markdown("### **CABINET PRIVÉ IMMOBILIER HONORAT**\n*TRANSACTION . CONSEIL . PATRIMOINE*")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
@@ -229,13 +193,7 @@ if st.session_state.analyse_terminee:
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     profil = ligne_bien.get('Profil & Stratégie', '')
-                    
-                    # Interrogation Open Data SIRENE à la volée pour l'adresse
-                    infos_sirene = enrichir_avec_sirene(adresse)
-                    structure = infos_sirene['structure']
-                    gerant = infos_sirene['gerant']
-                    siege = infos_sirene['siege']
-                    siren = infos_sirene['siren']
+                    proprietaire = ligne_bien.get('Propriétaire / SCI', '')
                     
                     apt = ligne_bien.get('N° Apt', '')
                     lot = ligne_bien.get('N° Lot', '')
@@ -243,20 +201,50 @@ if st.session_state.analyse_terminee:
                     bat = ligne_bien.get('Bâtiment', '')
                     
                     infos_repere = []
-                    if bat: infos_repere.append(f"Bât. {bat}")
-                    if etage: infos_repere.append(f"Étage : {etage}")
-                    if apt: infos_repere.append(f"Apt {apt}")
-                    if lot: infos_repere.append(f"Lot n° {lot}")
+                    if bat and str(bat).lower() != 'nan': infos_repere.append(f"Bât. {bat}")
+                    if etage and str(etage).lower() != 'nan': infos_repere.append(f"Étage : {etage}")
+                    if apt and str(apt).lower() != 'nan': infos_repere.append(f"Apt {apt}")
+                    if lot and str(lot).lower() != 'nan': infos_repere.append(f"Lot n° {lot}")
                     str_reperage = " | ".join(infos_repere) if infos_repere else "Bien identifié"
 
+                    # Gestion propre du destinataire
+                    if proprietaire and str(proprietaire).lower() != 'nan' and len(str(proprietaire).strip()) > 1:
+                        destinataire_affichage = f"Destinataire : {proprietaire}"
+                        appel_destinataire = f"À l'attention de {proprietaire},"
+                    else:
+                        destinataire_affichage = f"Destinataire : Propriétaire / Copropriétaire\nLocalisation du lot : {str_reperage}"
+                        appel_destinataire = f"Madame, Monsieur (Propriétaire du lot - {str_reperage}),"
+
                     st.markdown(f"### 📍 {adresse}")
-                    st.markdown(f"**Structure :** `{structure}` (Gérant : `{gerant}` - SIREN : `{siren}`)")
-                    st.markdown(f"**Repères :** `{str_reperage}` | **Siège social :** `{siege}`")
+                    st.markdown(f"**Ciblage :** `{str_reperage}` | **Profil :** `{profil}`")
                     
+                    courrier_modele = f"""CABINET PRIVÉ IMMOBILIER HONORAT
+TRANSACTION . CONSEIL . PATRIMOINE
+Nice, le {date_jour}
+
+{destinataire_affichage}
+Adresse du bien : {adresse}
+
+{appel_destinataire}
+
+Objet : Anticipation réglementaire, valorisation et optimisation de votre actif immobilier au {adresse} ({str_reperage})
+
+En qualité de Conseil en Immobilier Patrimonial pour le Cabinet Privé Immobilier Honorat à Nice, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble. 
+
+Au regard des récentes évolutions de la législation énergétique (calendrier d'interdiction de mise en location des passoires thermiques F et G) et de la fiscalité (régime LMNP, optimisation de la valeur vénale), l'anticipation de la gestion de votre patrimoine est devenue un enjeu majeur pour sécuriser votre rentabilité nette et éviter toute décote de votre bien.
+
+Je me tiens à votre entière disposition pour réaliser un audit confidentiel, une estimation patrimoniale actualisée et vous accompagner dans vos arbitrages.
+
+Bien cordialement,
+
+Nathalie Parra
+Conseil en Immobilier Patrimonial
+Cabinet Privé Immobilier Honorat - Nice"""
+
                     st.text_area(
-                        f"📄 Modèle de courrier :", 
-                        value=f"Nice, le {date_jour}\n\nDestinataire : {structure}\nSiège social : {siege}\nÀ l'attention de {gerant},\n\nObjet : Anticipation fiscale, arbitrage et optimisation de votre actif au {adresse}\n\nMadame, Monsieur ({str_reperage}),\n\nEn qualité de professionnel de l'immobilier patrimonial à Nice, je me permets de vous contacter concernant l'actif que vous détenez. Dans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette.\n\nJe me tiens à votre entière disposition pour un échange confidentiel.\n\nBien cordialement,\n\nNathalie Parra", 
-                        height=220,
+                        f"📄 Modèle de courrier - {adresse}", 
+                        value=courrier_modele, 
+                        height=270,
                         key=f"courrier_{adresse}"
                     )
                     st.markdown("---")
