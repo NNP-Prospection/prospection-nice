@@ -118,6 +118,12 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
 
+        # --- NOUVEAU : NETTOYAGE DES DOUBLONS DE LA BASE DPE ---
+        # On supprime les lignes qui ont exactement la même adresse et le même n° d'appartement
+        colonnes_doublons = [col for col in ['Adresse Exacte', 'N° Apt', 'Étage', 'Date DPE'] if col in df_affichage.columns]
+        if colonnes_doublons:
+            df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
+
         # Filtrage Secteur
         if secteur != "Tous les secteurs":
             rues_quartiers = {
@@ -174,7 +180,15 @@ if st.session_state.analyse_terminee:
     
     with tab1:
         st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères.")
-        event_selection = st.dataframe(st.session_state.df_affichage, use_container_width=True, on_select="rerun", selection_mode="multi-row")
+        
+        # --- NOUVEAU : CACHER L'INDEX (hide_index=True) ---
+        event_selection = st.dataframe(
+            st.session_state.df_affichage, 
+            use_container_width=True, 
+            on_select="rerun", 
+            selection_mode="multi-row",
+            hide_index=True
+        )
         st.download_button("📥 Télécharger (CSV)", data=st.session_state.df_affichage.to_csv(index=False).encode('utf-8'), file_name="listing_prospection.csv", mime='text/csv')
 
     with tab2:
@@ -182,7 +196,8 @@ if st.session_state.analyse_terminee:
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_cycle = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Cycle ~5 ans", na=False)]
             if not df_cycle.empty:
-                st.dataframe(df_cycle, use_container_width=True)
+                # --- NOUVEAU : CACHER L'INDEX ICI AUSSI ---
+                st.dataframe(df_cycle, use_container_width=True, hide_index=True)
             else:
                 st.info("ℹ️ Aucun bien ne correspond à ce critère dans ce lot.")
 
@@ -204,10 +219,8 @@ if st.session_state.analyse_terminee:
                 for adresse in adresses_selectionnees:
                     ligne_bien = st.session_state.df_affichage[st.session_state.df_affichage['Adresse Exacte'] == adresse].iloc[0]
                     
-                    # On appelle l'API SIRENE/BODACC
                     infos_sirene = enrichir_avec_sirene(adresse)
                     
-                    # Nettoyage
                     apt = formater_numero(ligne_bien.get('N° Apt', ''))
                     lot = formater_numero(ligne_bien.get('N° Lot', ''))
                     etage = formater_numero(ligne_bien.get('Étage', ''))
@@ -222,11 +235,9 @@ if st.session_state.analyse_terminee:
 
                     paragraphe_strategique = "Au regard des récentes évolutions de la législation énergétique (calendrier d'interdiction de mise en location des passoires thermiques F et G) et de la fiscalité (régime LMNP, optimisation de la valeur vénale), l'anticipation de la gestion de votre patrimoine est devenue un enjeu majeur pour sécuriser votre rentabilité nette et éviter toute décote de votre bien."
 
-                    # Destinataire par défaut (Propriétaire/Lot)
                     destinataire_affichage = f"Destinataire : Propriétaire / Copropriétaire\nLocalisation du lot : {str_reperage}"
                     appel_destinataire = f"Madame, Monsieur (Propriétaire du lot - {str_reperage}),"
 
-                    # Surcharge BODACC si une SCI est trouvée
                     if infos_sirene:
                         statut = infos_sirene['statut_bodacc']
                         st.markdown(f"**💡 Opportunité SCI détectée :** Structure `{infos_sirene['structure']}` | Statut : {statut}")
