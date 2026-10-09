@@ -22,35 +22,25 @@ if 'analyse_locative_terminee' not in st.session_state:
 
 import os
 
-# --- CHARGEMENT DES FICHIERS DVF LOCAUX (Avec diagnostic) ---
+import os
+
 @st.cache_data
 def load_dvf():
     try:
         dossier = 'data_dvf'
-        if os.path.exists(dossier):
-            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
-            st.write(f"🔍 Fichiers CSV détectés dans {dossier} : {fichiers}") # Permet de voir si les fichiers sont bien là
-        else:
-            st.error(f"Le dossier '{dossier}' est introuvable sur GitHub !")
-            return pd.DataFrame()
-            
-        if not fichiers:
-            st.warning("Le dossier data_dvf existe mais aucun fichier .csv n'a été trouvé à l'intérieur.")
-            return pd.DataFrame()
-            
+        fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
+        
+        # On lit juste le premier fichier pour voir comment s'appellent les colonnes
+        df_test = pd.read_csv(fichiers[0], low_memory=False)
+        st.write("📋 **Colonnes trouvées dans vos fichiers CSV :**", list(df_test.columns))
+        
+        # Lecture et fusion automatique
         liste_df = [pd.read_csv(f, low_memory=False) for f in fichiers]
         df = pd.concat(liste_df, ignore_index=True)
-        df = df.drop_duplicates()
         
-        if 'latitude' in df.columns and 'longitude' in df.columns:
-            df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
-            
-        df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
-        df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
-        
-        return df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
+        return df
     except Exception as e:
-        st.error(f"Erreur lors du chargement des fichiers DVF : {e}")
+        st.error(f"Erreur : {e}")
         return pd.DataFrame()
 
 
