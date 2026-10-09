@@ -22,26 +22,38 @@ if 'analyse_locative_terminee' not in st.session_state:
 
 import os
 
-import os
-
 @st.cache_data
 def load_dvf():
     try:
         dossier = 'data_dvf'
         fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
         
-        # On lit juste le premier fichier pour voir comment s'appellent les colonnes
-        df_test = pd.read_csv(fichiers[0], low_memory=False)
-        st.write("📋 **Colonnes trouvées dans vos fichiers CSV :**", list(df_test.columns))
-        
-        # Lecture et fusion automatique
-        liste_df = [pd.read_csv(f, low_memory=False) for f in fichiers]
+        if not fichiers:
+            return pd.DataFrame()
+            
+        # Lecture avec le séparateur point-virgule (;) adapté à vos fichiers
+        liste_df = [pd.read_csv(f, sep=';', low_memory=False) for f in fichiers]
         df = pd.concat(liste_df, ignore_index=True)
+        df = df.drop_duplicates()
         
-        return df
+        # Harmonisation des colonnes géographiques
+        if 'latitude' in df.columns and 'longitude' in df.columns:
+            df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+            
+        # Nettoyage et calcul du prix au m²
+        df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
+        
+        # Conversion en numérique (nécessaire si les nombres ont des virgules ou du texte)
+        df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
+        df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
+        
+        df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
+        
+        return df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
     except Exception as e:
-        st.error(f"Erreur : {e}")
+        st.error(f"Erreur lors du chargement des fichiers DVF : {e}")
         return pd.DataFrame()
+
 
 
 
