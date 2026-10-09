@@ -127,7 +127,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 colonnes_a_garder[col] = 'Adresse Exacte'
                 break
                 
-        # On verrouille pour ne prendre qu'une seule colonne de chaque type
         cibles = {'Étage': False, 'N° Apt': False, 'N° Lot': False, 'Bâtiment': False, 'Note DPE': False, 'Date DPE': False}
         
         for col in df_resultats.columns:
@@ -153,7 +152,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         
-        # Filtres de qualité stricts (Doublons de lignes)
         colonnes_doublons = [col for col in ['Adresse Exacte', 'N° Apt', 'Étage', 'Date DPE'] if col in df_affichage.columns]
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
@@ -226,7 +224,7 @@ if st.session_state.analyse_terminee:
         "📊 1. Listing & Repères", 
         "🏖️ 2. Cycle ~5 ans (DPE)", 
         "✉️ 3. Publipostage & Impression",
-        "🗺️ 4. Cartographie (DVF)"
+        "💶 4. Valeurs Foncières (DVF & Prix m²)"
     ])
     
     with tab1:
@@ -277,15 +275,6 @@ if st.session_state.analyse_terminee:
                     destinataire_affichage = f"Destinataire : Propriétaire / Copropriétaire\nLocalisation du lot : {str_reperage}"
                     appel_destinataire = f"Madame, Monsieur (Propriétaire du lot - {str_reperage}),"
 
-                    if infos_sirene:
-                        statut = infos_sirene['statut_bodacc']
-                        st.markdown(f"**💡 Opportunité SCI détectée :** Structure `{infos_sirene['structure']}` | Statut : {statut}")
-                        destinataire_affichage = f"Destinataire : {infos_sirene['structure']}\nSiège social : {infos_sirene['siege']}"
-                        appel_destinataire = f"À l'attention de {infos_sirene['gerant'] if infos_sirene['gerant'] else 'la Gérance'},"
-                        
-                        if "CESSATION" in statut:
-                            paragraphe_strategique = "Ayant pris connaissance des récentes évolutions concernant votre structure (cessation / procédure), je tenais à vous proposer une estimation confidentielle et rapide de vos actifs immobiliers afin de faciliter vos démarches d'arbitrage ou de restructuration."
-
                     st.markdown(f"### 📍 {adresse} - Ciblage : `{str_reperage}`")
                     
                     courrier_modele = f"""Nice, le {date_jour}
@@ -318,9 +307,40 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                     st.markdown("---")
 
     with tab4:
-        st.subheader("🗺️ Marché Local (Données DVF)")
-        if not df_dvf.empty and 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
-            st.write("Vue d'ensemble des dernières transactions actées pour affiner vos audits.")
-            st.map(df_dvf[['lat', 'lon']].dropna())
+        st.subheader("💶 Historique des Ventes & Analyse des Prix au m²")
+        if not df_dvf.empty:
+            st.write("Base de données des Demandes de Valeurs Foncières (DVF) pour étayer vos avis de valeur avec des transactions réelles.")
+            
+            # Préparation du tableau DVF pour un affichage propre
+            colonnes_dvf = ['date_mutation', 'type_local', 'nom_commune', 'valeur_fonciere', 'surface_reelle_bati', 'prix_m2']
+            colonnes_presentes = [col for col in colonnes_dvf if col in df_dvf.columns]
+            
+            if colonnes_presentes:
+                df_dvf_propre = df_dvf[colonnes_presentes].copy()
+                
+                # Formatage des chiffres pour la lisibilité
+                if 'valeur_fonciere' in df_dvf_propre.columns:
+                    df_dvf_propre['valeur_fonciere'] = df_dvf_propre['valeur_fonciere'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+                if 'surface_reelle_bati' in df_dvf_propre.columns:
+                    df_dvf_propre['surface_reelle_bati'] = df_dvf_propre['surface_reelle_bati'].apply(lambda x: f"{x:,.0f} m²" if pd.notnull(x) else "")
+                if 'prix_m2' in df_dvf_propre.columns:
+                    df_dvf_propre['prix_m2'] = df_dvf_propre['prix_m2'].apply(lambda x: f"{x:,.0f} €/m²".replace(',', ' '))
+                
+                # On renomme pour que ce soit plus joli à l'écran
+                df_dvf_propre = df_dvf_propre.rename(columns={
+                    'date_mutation': 'Date Acte',
+                    'type_local': 'Type de Bien',
+                    'nom_commune': 'Commune',
+                    'valeur_fonciere': 'Prix de Vente',
+                    'surface_reelle_bati': 'Surface',
+                    'prix_m2': 'Prix / m²'
+                })
+                
+                st.dataframe(df_dvf_propre.head(200), use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            st.write("📍 **Cartographie des transactions :**")
+            if 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
+                st.map(df_dvf[['lat', 'lon']].dropna())
         else:
-            st.info("Placez vos fichiers DVF (.csv) dans le dossier 'data_dvf' pour afficher la carte.")
+            st.info("ℹ️ Les données DVF n'ont pas pu être chargées. Assurez-vous que vos fichiers .csv sont dans le dossier 'data_dvf'.")
