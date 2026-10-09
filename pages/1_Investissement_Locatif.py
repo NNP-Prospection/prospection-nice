@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+import requests
 
 st.set_page_config(
     page_title="Investissement Locatif & SCI - Cabinet Honorat", 
@@ -9,76 +10,142 @@ st.set_page_config(
 )
 
 st.title("🏢 Espace Investissement Locatif & SCI - Nice")
-st.markdown("Ciblage spécifique des structures sociétaires, des investisseurs et génération des courriers patrimoniaux - Cabinet Privé Immobilier Honorat.")
+st.markdown("Ciblage spécifique des structures sociétaires, des investisseurs et génération des courriers patrimoniaux.")
 
 # --- NAVIGATION PAR ONGLET ---
 tab1, tab2, tab3 = st.tabs([
     "1. Listing Investisseurs & SCI", 
     "2. Publipostage & Impression", 
-    "3. Cartographie DVF & DPE (Carré d'Or)"
+    "3. Cartographie DVF & DPE"
 ])
 
-# --- CHARGEMENT DES FICHIERS DVF LOCAUX (Dossier data_dvf) ---
+# --- FONCTION DE CROISEMENT OPEN DATA SIRENE ---
 @st.cache_data
-def load_dvf():
+def enrichir_avec_sirene(adresse_str):
+    """
+    Interroge l'API Open Data officielle (Recherche Entreprises / SIRENE)
+    pour récupérer la SCI, le gérant et le siège social à partir de l'adresse.
+    """
+    try:
+        url = f"https://recherche-entreprises.api.gouv.fr/recherche?q={adresse_str}&per_page=1"
+        reponse = requests.get(url, timeout=3)
+        if reponse.status_code == 200:
+            data = reponse.json()
+            resultats = data.get('results', [])
+            if resultats:
+                entite = resultats[0]
+                nom = entite.get('nom_raison_sociale', '')
+                siren = entite.get('siren', '')
+                
+                dirigeants = entite.get('dirigeants', [])
+                nom_gerant = ""
+                if dirigeants:
+                    prenom = dirigeants[0].get('prenoms', '')
+                    patronyme = dirigeants[0].get('nom', '')
+                    nom_gerant = f"{prenom} {patronyme}".strip()
+                
+                siege = entite.get('siege', {})
+                adresse_siege = siege.get('adresse', adresse_str)
+                
+                # On ne retourne que si c'est potentiellement une SCI ou entreprise
+                if nom:
+                     return {
+                        'structure': nom,
+                        'siren': siren,
+                        'gerant': nom_gerant,
+                        'siege': adresse_siege
+                    }
+    except Exception:
+        pass
+        
+    return None
+
+# --- CHARGEMENT DES FICHIERS ---
+@st.cache_data
+def load_data():
+    df_dvf = pd.DataFrame()
+    df_dpe = pd.DataFrame()
+    
+    # Chargement DVF
     try:
         dossier = 'data_dvf'
         if os.path.exists(dossier):
             fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
-        else:
-            fichiers = []
-            
-        if not fichiers:
-            return pd.DataFrame()
-            
-        liste_df = [pd.read_csv(f, sep=';', low_memory=False) for f in fichiers]
-        df = pd.concat(liste_df, ignore_index=True)
-        df = df.drop_duplicates()
-        
-        if 'latitude' in df.columns and 'longitude' in df.columns:
-            df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
-            
-        df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
-        
-        df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
-        df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
-        
-        df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
-        
-        return df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
+            if fichiers:
+                liste_df = [pd.read_csv(f, sep=';', low_memory=False) for f in fichiers]
+                df_dvf = pd.concat(liste_df, ignore_index=True)
+                if 'latitude' in df_dvf.columns and 'longitude' in df_dvf.columns:
+                    df_dvf = df_dvf.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
     except Exception as e:
-        st.error(f"Erreur lors du chargement des fichiers DVF : {e}")
-        return pd.DataFrame()
+        pass
 
-df_dvf = load_dvf()
+    # Chargement DPE
+    try:
+        df_dpe = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
+    except Exception as e:
+        pass
+        
+    return df_dvf, df_dpe
+
+df_dvf, df_dpe = load_data()
 
 with tab1:
     st.subheader("Ciblage et Qualification des Actifs / SCI")
-    secteur = st.selectbox("Quartier / Secteur", ["Carré d'Or", "Promenade des Anglais", "Musiciens"])
+    secteur = st.selectbox("Quartier / Secteur", ["Tous les secteurs", "Carré d'Or", "Promenade des Anglais", "Musiciens"])
     
     if st.button("Générer le listing Investisseurs / SCI", type="primary"):
-        st.success(f"Analyse du secteur : {secteur}")
-        
-        adresses_exemple = [
-            "11 Avenue du Cap de Nice",
-            "4 Avenue de Verdun (Carré d'Or)",
-            "12 Rue Paradis"
-        ]
-        
-        if 'df_locatif' not in st.session_state:
-            st.session_state.df_locatif = pd.DataFrame()
+        if not df_dpe.empty:
+            df_recherche = df_dpe.copy()
             
-        data_rows = []
-        for adresse in adresses_exemple:
-            data_rows.append({
-                'Adresse Exacte': adresse,
-                'Propriétaire / SCI': '',  # Laissé vide si non connu pour garder la propreté du courrier
-                'N° Apt': 'Apt 22',
-                'Étage': '3ème'
-            })
-        st.session_state.df_locatif = pd.DataFrame(data_rows)
+            # Récupération de l'adresse
+            col_adresse = next((col for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete'] if col in df_recherche.columns), None)
+            
+            if col_adresse:
+                # Filtrage par secteur
+                if secteur != "Tous les secteurs":
+                     rues_quartiers = {
+                        "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt"],
+                        "Promenade des Anglais": ["promenade des anglais", "etats-unis", "quai des etats-unis"],
+                        "Musiciens": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo"]
+                    }
+                     mots_cles = rues_quartiers.get(secteur, [])
+                     if mots_cles:
+                         pattern = '|'.join(mots_cles)
+                         df_recherche = df_recherche[df_recherche[col_adresse].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-    if not st.session_state.get('df_locatif', pd.DataFrame()).empty:
+                # On prend un échantillon pour ne pas surcharger l'API (ex: les 20 premières adresses)
+                adresses_a_tester = df_recherche[col_adresse].dropna().unique()[:20]
+                
+                data_rows = []
+                with st.spinner("Recherche des structures (SCI) en cours..."):
+                    for adresse in adresses_a_tester:
+                        infos = enrichir_avec_sirene(adresse)
+                        if infos: # On ne garde que si l'API a trouvé une structure
+                            # Recherche des repères dans le DPE pour cette adresse
+                            ligne_dpe = df_recherche[df_recherche[col_adresse] == adresse].iloc[0]
+                            apt = ligne_dpe.get('numero_appartement', ligne_dpe.get('numero_appt', ''))
+                            etage = ligne_dpe.get('etage', '')
+                            
+                            data_rows.append({
+                                'Adresse Exacte': adresse,
+                                'Propriétaire / SCI': infos['structure'],
+                                'Gérant': infos['gerant'],
+                                'SIREN': infos['siren'],
+                                'Siège Social': infos['siege'],
+                                'N° Apt': apt,
+                                'Étage': etage
+                            })
+                
+                st.session_state.df_locatif = pd.DataFrame(data_rows)
+                if st.session_state.df_locatif.empty:
+                    st.warning("Aucune structure sociétaire n'a été trouvée automatiquement pour cet échantillon d'adresses. L'API Sirene n'a peut-être pas de correspondance exacte.")
+            else:
+                st.error("Colonne d'adresse introuvable dans le fichier DPE.")
+        else:
+            st.error("Fichier DPE non chargé.")
+
+    if 'df_locatif' in st.session_state and not st.session_state.df_locatif.empty:
+        st.success(f"✅ {len(st.session_state.df_locatif)} structures trouvées.")
         event_selection_loc = st.dataframe(
             st.session_state.df_locatif, 
             use_container_width=True,
@@ -86,23 +153,16 @@ with tab1:
             selection_mode="multi-row",
             key="table_locatif"
         )
-        st.download_button("📥 Télécharger le listing Investisseurs (CSV)", data=st.session_state.df_locatif.to_csv(index=False).encode('utf-8'), file_name="listing_investissement_locatif.csv", mime='text/csv')
+        st.download_button("📥 Télécharger le listing", data=st.session_state.df_locatif.to_csv(index=False).encode('utf-8'), file_name="listing_investissement_locatif.csv", mime='text/csv')
 
 with tab2:
-    st.subheader("✉️ Générateur de Courriers Investisseur & SCI - Cabinet Honorat")
-    
-    # Affichage du logo si présent dans le dossier du projet
-    logo_path = "Cabinet Immobilier Privé HONORAT.png"
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=300)
-    else:
-        st.markdown("### **CABINET PRIVÉ IMMOBILIER HONORAT**\n*TRANSACTION . CONSEIL . PATRIMOINE*")
+    st.subheader("✉️ Générateur de Courriers Investisseur & SCI")
     
     if 'df_locatif' in st.session_state and not st.session_state.df_locatif.empty and 'Adresse Exacte' in st.session_state.df_locatif.columns:
         liste_adresses_loc = st.session_state.df_locatif['Adresse Exacte'].dropna().unique().tolist()
         
         adresses_selectionnees = st.multiselect(
-            "📍 Adresses sélectionnées pour la campagne investisseur :", 
+            "📍 Adresses sélectionnées :", 
             liste_adresses_loc, 
             default=liste_adresses_loc
         )
@@ -111,13 +171,15 @@ with tab2:
             date_jour = datetime.now().strftime("%d/%m/%Y")
             
             if st.button("🖨️ Préparer l'impression groupée", type="primary"):
-                st.success("📄 Courriers investisseurs prêts ! Utilisez `Ctrl + P` ou `Cmd + P` pour lancer l'impression.")
+                st.success("📄 Courriers prêts.")
 
             st.markdown("---")
             
             for adresse in adresses_selectionnees:
                 ligne_bien = st.session_state.df_locatif[st.session_state.df_locatif['Adresse Exacte'] == adresse].iloc[0]
-                proprietaire = ligne_bien.get('Propriétaire / SCI', '')
+                structure = ligne_bien.get('Propriétaire / SCI', '')
+                gerant = ligne_bien.get('Gérant', '')
+                siege = ligne_bien.get('Siège Social', adresse)
                 apt = ligne_bien.get('N° Apt', '')
                 etage = ligne_bien.get('Étage', '')
                 
@@ -126,31 +188,27 @@ with tab2:
                 if apt and str(apt).lower() != 'nan': infos_repere.append(f"Apt {apt}")
                 str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
 
-                # Gestion propre du destinataire
-                if proprietaire and str(proprietaire).lower() != 'nan' and len(str(proprietaire).strip()) > 1:
-                    destinataire_affichage = f"Destinataire : {proprietaire}"
-                    appel_destinataire = f"À l'attention de {proprietaire},"
+                # Construction du destinataire
+                if structure:
+                    en_tete = f"Destinataire : {structure}\nSiège social : {siege}\n"
+                    if gerant:
+                         en_tete += f"À l'attention de {gerant},"
+                    else:
+                         en_tete += "À l'attention de la Gérance,"
                 else:
-                    destinataire_affichage = f"Destinataire : Propriétaire / Investisseur\nLocalisation de l'actif : {str_reperage}"
-                    appel_destinataire = f"Madame, Monsieur (Investisseur - {str_reperage}),"
+                    en_tete = f"Destinataire : Propriétaire / Investisseur\nLocalisation de l'actif : {str_reperage}\nMadame, Monsieur (Investisseur - {str_reperage}),"
 
                 st.markdown(f"### 📍 {adresse}")
-                st.markdown(f"**Ciblage de l'actif :** `{str_reperage}`")
                 
-                courrier_texte = f"""CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE
-Nice, le {date_jour}
+                courrier_texte = f"""Nice, le {date_jour}
 
-{destinataire_affichage}
-Adresse de l'actif : {adresse}
-
-{appel_destinataire}
+{en_tete}
 
 Objet : Anticipation fiscale, arbitrage et optimisation de votre actif au {adresse} ({str_reperage})
 
-En qualité de Conseil en Immobilier Patrimonial pour le Cabinet Privé Immobilier Honorat à Nice, je me permets de vous contacter concernant l'actif que vous détenez. 
+En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter concernant l'actif que vous détenez. 
 
-Dans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette et optimiser la transmission ou la revente de vos actifs.
+Dans le cadre des évolutions de la fiscalité immobilière, l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette et optimiser la transmission ou la revente de vos actifs.
 
 Je me tiens à votre entière disposition pour réaliser un audit confidentiel de valorisation et vous accompagner dans vos projets d'arbitrage.
 
@@ -158,17 +216,24 @@ Bien cordialement,
 
 Nathalie Parra
 Conseil en Immobilier Patrimonial
-Cabinet Privé Immobilier Honorat - Nice"""
 
-                st.text_area(f"Modèle de courrier - {adresse}", courrier_texte, height=270, key=f"courrier_loc_{adresse}")
+CABINET PRIVÉ IMMOBILIER HONORAT
+TRANSACTION . CONSEIL . PATRIMOINE"""
+                
+                st.text_area(f"Modèle de courrier - {adresse}", courrier_texte, height=350, key=f"courrier_loc_{adresse}")
+                
+                # Affichage du logo sous le texte
+                logo_path = "Cabinet Immobilier Privé HONORAT.png"
+                if os.path.exists(logo_path):
+                    st.image(logo_path, width=200)
+                
                 st.markdown("---")
     else:
         st.info("👉 Générez d'abord le listing dans l'onglet 1.")
 
 with tab3:
-    st.subheader("🗺️ Analyse Spatiale : DVF & DPE (Carré d'Or)")
+    st.subheader("🗺️ Cartographie")
     if not df_dvf.empty:
-        st.metric("Ventes DVF chargées", len(df_dvf))
         st.map(df_dvf[['lat', 'lon']].dropna())
     else:
-        st.warning("En attente des données DVF dans le dossier data_dvf.")
+        st.warning("Données non disponibles.")
