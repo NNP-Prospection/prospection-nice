@@ -67,7 +67,7 @@ def enrichir_avec_sirene(adresse_str):
         pass
     return None
 
-# --- CHARGEMENT DPE & DVF ---
+# --- CHARGEMENT DPE & DVF (AVEC DETECTEUR AUTOMATIQUE) ---
 @st.cache_data
 def load_dpe():
     try:
@@ -78,23 +78,50 @@ def load_dpe():
 @st.cache_data
 def load_dvf():
     try:
-        # CORRECTION ICI : le vrai nom de votre dossier sur GitHub
-        dossier = 'données_dvf'
-        if os.path.exists(dossier):
-            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
-            if fichiers:
-                liste_df = [pd.read_csv(os.path.join(dossier, f), sep=';', low_memory=False) for f in fichiers]
-                df = pd.concat(liste_df, ignore_index=True).drop_duplicates()
-                if 'latitude' in df.columns:
-                    df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
-                if 'valeur_fonciere' in df.columns and 'surface_reelle_bati' in df.columns and 'lat' in df.columns:
-                    df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
-                    df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
-                    df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
-                    df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
-                    df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
-                return df
-        return pd.DataFrame()
+        # Recherche intelligente du dossier DVF (ignore les accents)
+        dossier = None
+        for item in os.listdir('.'):
+            if os.path.isdir(item) and 'dvf' in item.lower():
+                dossier = item
+                break
+                
+        if not dossier:
+            return pd.DataFrame() # Retourne vide si aucun dossier trouvé
+            
+        # Accepte les CSV et les TXT
+        fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv') or f.endswith('.txt')]
+        if not fichiers:
+            return pd.DataFrame() # Retourne vide si dossier trouvé mais vide
+            
+        liste_df = []
+        for f in fichiers:
+            try:
+                # Test de plusieurs séparateurs utilisés par le gouvernement
+                df_temp = pd.read_csv(f, sep=';', low_memory=False)
+                if len(df_temp.columns) < 3:
+                    df_temp = pd.read_csv(f, sep=',', low_memory=False)
+                if len(df_temp.columns) < 3:
+                    df_temp = pd.read_csv(f, sep='|', low_memory=False)
+                liste_df.append(df_temp)
+            except:
+                pass
+                
+        if not liste_df:
+            return pd.DataFrame()
+            
+        df = pd.concat(liste_df, ignore_index=True).drop_duplicates()
+        
+        # Nettoyage et formatage
+        if 'latitude' in df.columns:
+            df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+        if 'valeur_fonciere' in df.columns and 'surface_reelle_bati' in df.columns and 'lat' in df.columns:
+            df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
+            df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
+            df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
+            df = df[df['surface_reelle_bati'] > 0] # Sécurité division par zéro
+            df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
+            df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
+        return df
     except:
         return pd.DataFrame()
 
@@ -341,4 +368,12 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
             if 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
                 st.map(df_dvf[['lat', 'lon']].dropna())
         else:
-            st.info("ℹ️ Les données DVF n'ont pas pu être chargées. Assurez-vous que vos fichiers .csv sont dans le dossier 'données_dvf'.")
+            # --- OUTIL DE DIAGNOSTIC AUTOMATIQUE ---
+            dossiers = [d for d in os.listdir('.') if os.path.isdir(d) and not d.startswith('.')]
+            dossier_dvf = next((d for d in dossiers if 'dvf' in d.lower()), "Aucun dossier trouvé")
+            fichiers_trouves = os.listdir(dossier_dvf) if dossier_dvf != "Aucun dossier trouvé" else []
+            
+            st.warning("⚠️ **Les données n'ont pas pu s'afficher. Voici le diagnostic du serveur :**")
+            st.write(f"- Dossier lié aux DVF trouvé sur votre GitHub : **`{dossier_dvf}`**")
+            st.write(f"- Fichiers trouvés à l'intérieur : `{fichiers_trouves if fichiers_trouves else 'Dossier vide'}`")
+            st.info("💡 **Conseil :** Vérifiez sur GitHub que vous avez bien mis vos fichiers DVF dans ce dossier, qu'ils se terminent bien par `.csv` ou `.txt`, et qu'ils ne sont pas endommagés.")
