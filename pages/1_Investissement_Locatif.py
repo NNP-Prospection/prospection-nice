@@ -6,30 +6,24 @@ import requests
 import time
 
 st.set_page_config(
-    page_title="Investissement Locatif & SCI - Cabinet Honorat", 
+    page_title="Stratégie 2 - Cabinet Honorat", 
+    page_icon="💼",
     layout="wide"
 )
 
-st.title("🏢 Espace Investissement Locatif & SCI - Nice")
-st.markdown("Ciblage des lots d'investissement (Passoires) et détection des sièges sociaux de SCI (INPI/BODACC).")
+st.title("💼 Stratégie 2 : SCI & Alertes Juridiques (Nice)")
+st.markdown("Approche par l'investisseur : Ciblage des structures (SCI), détection INPI/BODACC et cartographie des ventes (DVF).")
 
-# --- FONCTION POUR IDENTIFIER LES VIDES ---
 def est_vide(val):
-    if pd.isna(val): 
-        return True
-    val_str = str(val).strip().lower()
-    return val_str in ['nan', 'none', 'null', '', '<na>']
+    if pd.isna(val): return True
+    return str(val).strip().lower() in ['nan', 'none', 'null', '', '<na>']
 
-# --- FONCTION POUR NETTOYER LES .0 ---
 def formater_numero(val):
-    if est_vide(val): 
-        return ''
+    if est_vide(val): return ''
     val_str = str(val).strip()
-    if val_str.endswith('.0'): 
-        return val_str[:-2]
+    if val_str.endswith('.0'): return val_str[:-2]
     return val_str
 
-# --- FONCTION API SIRENE ---
 @st.cache_data(show_spinner=False)
 def enrichir_avec_sirene(adresse_str):
     try:
@@ -44,41 +38,51 @@ def enrichir_avec_sirene(adresse_str):
                 siren = entite.get('siren', '')
                 
                 dirigeants = entite.get('dirigeants', [])
-                nom_gerant = ""
-                if dirigeants:
-                    nom_gerant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip()
+                nom_gerant = f"{dirigeants[0].get('prenoms', '')} {dirigeants[0].get('nom', '')}".strip() if dirigeants else ""
                 
                 etat_admin = entite.get('etat_administratif', 'A') 
-                alerte_bodacc = "Actif"
-                if etat_admin == 'C':
-                    alerte_bodacc = "🚨 CESSATION / LIQUIDATION"
-                
+                alerte_bodacc = "🚨 CESSATION / LIQUIDATION" if etat_admin == 'C' else "Actif"
                 siege = entite.get('siege', {}).get('adresse', adresse_str)
                 
                 if nom:
-                     return {
-                        'structure': nom,
-                        'siren': siren,
-                        'gerant': nom_gerant,
-                        'siege': siege,
-                        'statut_bodacc': alerte_bodacc
-                    }
-    except Exception:
+                     return {'structure': nom, 'siren': siren, 'gerant': nom_gerant, 'siege': siege, 'statut_bodacc': alerte_bodacc}
+    except:
         pass
     return None
 
-# --- CHARGEMENT DPE ---
 @st.cache_data
-def load_data():
+def load_dpe():
     try:
         return pd.read_csv('dpe_nice_fg.csv', low_memory=False)
     except:
         return pd.DataFrame()
 
-df_dpe = load_data()
+@st.cache_data
+def load_dvf():
+    try:
+        dossier = 'data_dvf'
+        if os.path.exists(dossier):
+            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
+            if fichiers:
+                liste_df = [pd.read_csv(os.path.join(dossier, f), sep=';', low_memory=False) for f in fichiers]
+                df = pd.concat(liste_df, ignore_index=True).drop_duplicates()
+                if 'latitude' in df.columns:
+                    df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+                if 'valeur_fonciere' in df.columns and 'surface_reelle_bati' in df.columns and 'lat' in df.columns:
+                    df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
+                    df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
+                    df['surface_reelle_bati'] = pd.to_numeric(df['surface_reelle_bati'].astype(str).str.replace(',', '.'), errors='coerce')
+                    df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
+                    df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
+                return df
+        return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
-# --- NAVIGATION PAR ONGLET ---
-tab1, tab2 = st.tabs(["📊 1. Radar des Actifs Locatifs", "✉️ 2. Publipostage Stratégique"])
+df_dpe = load_dpe()
+df_dvf = load_dvf()
+
+tab1, tab2, tab3 = st.tabs(["📊 1. Radar des Actifs Locatifs", "✉️ 2. Publipostage Stratégique", "🗺️ 3. Cartographie (DVF)"])
 
 with tab1:
     st.subheader("Ciblage des actifs et recherche de propriétaires (INPI)")
@@ -93,7 +97,6 @@ with tab1:
         if not df_dpe.empty:
             df_recherche = df_dpe.copy()
             
-            # --- CORRECTION ICI : Détection intelligente des colonnes ---
             col_adresse = next((col for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete'] if col in df_recherche.columns), None)
             col_apt = next((col for col in df_recherche.columns if 'appartement' in col.lower() or 'porte' in col.lower() or 'numero_appt' in col.lower()), None)
             col_etage = next((col for col in df_recherche.columns if 'etage' in col.lower() or 'niveau' in col.lower()), None)
@@ -112,7 +115,6 @@ with tab1:
                          pattern = '|'.join(mots_cles)
                          df_recherche = df_recherche[df_recherche[col_adresse].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-                # Extraction du Lot
                 index_debut = (int(tranche_mois.split()[1]) - 1) * 50
                 adresses_uniques = df_recherche[col_adresse].dropna().unique()
                 adresses_a_tester = adresses_uniques[index_debut:index_debut + 50]
@@ -127,14 +129,9 @@ with tab1:
                         infos = enrichir_avec_sirene(adresse)
                         ligne_dpe = df_recherche[df_recherche[col_adresse] == adresse].iloc[0]
                         
-                        # Utilisation des colonnes trouvées dynamiquement
-                        apt_brut = ligne_dpe[col_apt] if col_apt else ''
-                        etage_brut = ligne_dpe[col_etage] if col_etage else ''
+                        apt = formater_numero(ligne_dpe[col_apt] if col_apt else '')
+                        etage = formater_numero(ligne_dpe[col_etage] if col_etage else '')
                         
-                        apt = formater_numero(apt_brut)
-                        etage = formater_numero(etage_brut)
-                        
-                        # Filtre strict : on ne garde que s'il y a un repère physique exploitable
                         if apt or etage:
                             if infos:
                                 statut_inpi = f"✅ Siège trouvé : {infos['structure']}"
@@ -150,13 +147,12 @@ with tab1:
                                 'Statut INPI': statut_inpi,
                                 'BODACC': alerte
                             })
-                        
                         time.sleep(0.1)
                         progress_bar.progress((i + 1) / len(adresses_a_tester))
                 
                 st.session_state.df_locatif = pd.DataFrame(data_rows)
                 if st.session_state.df_locatif.empty:
-                    st.warning(f"Aucun actif exploitable (avec numéro d'appartement ou étage) trouvé dans ce lot.")
+                    st.warning("Aucun actif exploitable (avec numéro d'appartement ou étage) trouvé dans ce lot.")
             else:
                 st.error("Colonne d'adresse introuvable.")
         else:
@@ -168,10 +164,8 @@ with tab1:
 
 with tab2:
     st.subheader("✉️ Publipostage Investisseur")
-    
     if 'df_locatif' in st.session_state and not st.session_state.df_locatif.empty:
         liste_adresses_loc = st.session_state.df_locatif['Adresse de l\'actif'].dropna().unique().tolist()
-        
         lignes_sel = event_selection_loc['selection'].get('rows', []) if 'event_selection_loc' in locals() and event_selection_loc and 'selection' in event_selection_loc else []
         adresses_defaut = [liste_adresses_loc[i] for i in lignes_sel if i < len(liste_adresses_loc)]
 
@@ -209,7 +203,6 @@ with tab2:
                     strategie = "Ayant pris connaissance des évolutions récentes concernant l'état administratif de votre structure, je tenais à vous proposer une estimation confidentielle de vos actifs immobiliers afin de faciliter vos démarches d'arbitrage dans les meilleures conditions."
 
                 st.markdown(f"### 📍 {adresse}")
-                
                 courrier_texte = f"""Nice, le {date_jour}
 
 {en_tete}
@@ -232,10 +225,15 @@ Conseil en Immobilier Patrimonial
 
 CABINET PRIVÉ IMMOBILIER HONORAT
 TRANSACTION . CONSEIL . PATRIMOINE"""
-                
                 st.text_area(f"Modèle de courrier - {adresse}", courrier_texte, height=350, key=f"courrier_loc_{adresse}")
-                
                 logo_path = "Cabinet Immobilier Privé HONORAT.png"
-                if os.path.exists(logo_path):
-                    st.image(logo_path, width=200)
+                if os.path.exists(logo_path): st.image(logo_path, width=200)
                 st.markdown("---")
+
+with tab3:
+    st.subheader("🗺️ Cartographie des Ventes Récentes (DVF)")
+    if not df_dvf.empty and 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
+        st.write("Visualisation des dernières transactions immobilières actées sur le secteur.")
+        st.map(df_dvf[['lat', 'lon']].dropna())
+    else:
+        st.warning("⚠️ Les données cartographiques DVF ne sont pas disponibles. Vérifiez que les fichiers `.csv` se trouvent bien dans le dossier `data_dvf`.")
