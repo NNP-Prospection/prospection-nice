@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+import requests
+import xml.etree.ElementTree as ET
 
 st.set_page_config(
     page_title="Stratégie 2 - Investisseurs", 
@@ -9,9 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("💼 Stratégie 2 : Investisseurs & Hub Juridique")
-st.markdown("Ciblage des fins de cycles fiscaux (Pinel, LMNP) et base de ressources réglementaires (Urbanisme, Fiscalité, DPE).")
+st.title("💼 Stratégie 2 : Investisseurs & Veille Juridique Continue")
+st.markdown("Ciblage des fins de cycles fiscaux et alertes en direct sur les évolutions législatives.")
 
+# --- CHARGEMENT DPE ---
 @st.cache_data
 def load_dpe():
     try:
@@ -21,11 +24,51 @@ def load_dpe():
 
 df_dpe = load_dpe()
 
-tab1, tab2 = st.tabs(["✉️ 1. Publipostage Investisseurs", "📚 2. Hub Juridique & Fiscal"])
+# --- MOTEUR DE VEILLE JURIDIQUE EN TEMPS RÉEL ---
+@st.cache_data(ttl=3600) # L'outil se met à jour tout seul toutes les heures
+def fetch_veille_juridique():
+    flux_officiels = [
+        "https://www.service-public.fr/professionnels-entreprises/actualites/rss",
+        "https://www.service-public.fr/particuliers/actualites/rss"
+    ]
+    articles_trouves = []
+    
+    for url in flux_officiels:
+        try:
+            reponse = requests.get(url, timeout=5)
+            if reponse.status_code == 200:
+                root = ET.fromstring(reponse.content)
+                for item in root.findall('.//item'):
+                    titre = item.find('title').text if item.find('title') is not None else ""
+                    lien = item.find('link').text if item.find('link') is not None else ""
+                    
+                    # Le radar à "Lanterne Rouge"
+                    mots_cles_immo = ['loi', 'immobilier', 'logement', 'dpe', 'fiscal', 'impôt', 'bail', 'lmnp', 'pinel', 'copropriété', 'énergie', 'taxe', 'finance']
+                    is_alerte = any(mot in titre.lower() for mot in mots_cles_immo)
+                    
+                    if is_alerte:
+                        articles_trouves.append({'titre': titre, 'lien': lien})
+        except:
+            pass
+            
+    # On enlève les doublons potentiels et on garde les plus récents
+    articles_uniques = []
+    liens_vus = set()
+    for art in articles_trouves:
+        if art['lien'] not in liens_vus:
+            articles_uniques.append(art)
+            liens_vus.add(art['lien'])
+            
+    return articles_uniques[:8] # Affiche les 8 alertes les plus chaudes
+
+alertes_en_direct = fetch_veille_juridique()
+
+# --- AFFICHAGE DES ONGLETS ---
+tab1, tab2 = st.tabs(["✉️ 1. Publipostage Investisseurs", "🚨 2. Veille Juridique en Temps Réel"])
 
 with tab1:
     st.subheader("Ciblage des investisseurs : Fin d'avantage fiscal + Décote DPE")
-    st.write("Ce courrier est optimisé pour les propriétaires bailleurs (LMNP, LMP, Pinel, Denormandie) qui arrivent en fin de cycle de détention et font face à l'interdiction de louer.")
+    st.write("Ce courrier est optimisé pour les propriétaires bailleurs (LMNP, LMP, Pinel) qui arrivent en fin de cycle de détention et font face aux nouvelles mesures coercitives.")
     
     if not df_dpe.empty:
         col_adresse = next((col for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete'] if col in df_dpe.columns), None)
@@ -43,17 +86,17 @@ Concerne l'actif situé au : {adresse_choisie}
 
 Madame, Monsieur,
 
-Objet : Stratégie d'arbitrage de votre actif au {adresse_choisie} (Fin de cycle fiscal & Loi Climat)
+Objet : Alerte fiscale PLF 2027 et stratégie d'arbitrage de votre actif au {adresse_choisie}
 
-En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter de manière confidentielle concernant le bien que vous proposez à la location à cette adresse.
+En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter de manière confidentielle au sujet du bien que vous proposez à la location.
 
-Le marché locatif connaît actuellement un double bouleversement :
-1. L'échéance des avantages fiscaux initiaux (statuts LMNP/LMP, dispositifs d'amortissement) qui impacte mécaniquement la rentabilité nette de votre investissement.
-2. L'application stricte du calendrier de la Loi Climat et Résilience, qui va prochainement interdire la mise en location des biens les plus énergivores, imposant des travaux de rénovation globaux souvent lourds à supporter pour la copropriété.
+Le marché de l'investissement locatif traverse actuellement une zone de turbulence majeure :
+1. Le Projet de Loi de Finances (PLF) pour 2027 prévoit un plafonnement drastique des amortissements liés au statut LMNP (limités à 2,5 % par an et 7 000 € maximum). Les amortissements non déduits risquent d'être définitivement perdus.
+2. La Loi Climat maintient son calendrier strict : interdiction de mise en location imminente pour les biens les plus énergivores, imposant des travaux de rénovation globaux à la charge du bailleur.
 
-Avant de subir une décote de la valeur vénale de votre bien sur un marché qui se durcit, l'anticipation est votre meilleur atout. Une revente stratégique à court terme est souvent l'arbitrage le plus judicieux pour sécuriser votre capital et le réinvestir sur des supports plus performants.
+Avant que ces nouvelles réglementations ne soient définitivement promulguées et ne viennent amputer la rentabilité et la valeur vénale de votre bien, l'anticipation est votre meilleur atout. 
 
-Je me tiens à votre entière disposition pour réaliser un audit de valorisation de votre bien et vous accompagner dans vos projets d'arbitrage.
+Je vous propose de réaliser un audit gratuit et confidentiel de votre situation afin d'étudier l'opportunité d'un arbitrage ou d'une revente stratégique avant la fin de l'année.
 
 Bien cordialement,
 
@@ -63,40 +106,36 @@ Conseil en Immobilier Patrimonial
 CABINET PRIVÉ IMMOBILIER HONORAT
 TRANSACTION . CONSEIL . PATRIMOINE"""
 
-            st.text_area(f"📄 Modèle de courrier", courrier_investisseur, height=400)
+            st.text_area(f"📄 Modèle de courrier (Actualisé Loi Finance)", courrier_investisseur, height=400)
             logo_path = "Cabinet Immobilier Privé HONORAT.png"
             if os.path.exists(logo_path): 
                 st.image(logo_path, width=200)
 
 with tab2:
-    st.subheader("📚 Hub Juridique, Fiscal et Urbanisme")
-    st.write("Base de consultation rapide pour argumenter vos audits patrimoniaux.")
+    st.subheader("📡 Flux d'Actualités Officielles (Mis à jour automatiquement)")
+    st.write("Votre application scanne en direct les publications de l'État pour détecter les nouveautés liées à l'immobilier, au logement et à la fiscalité.")
     
-    with st.expander("📝 Loi Climat et Résilience (Calendrier DPE)"):
+    if alertes_en_direct:
+        for alerte in alertes_en_direct:
+            st.error(f"🚨 **LANTERNE ROUGE NOUVELLE LOI/MESURE :** [{alerte['titre']}]({alerte['lien']})")
+    else:
+        st.success("✅ Aucun nouveau décret ou loi majeure impactant l'immobilier détecté aujourd'hui sur les flux officiels.")
+        
+    st.markdown("---")
+    st.subheader("📌 Dossiers Chauds & Argumentaires en cours")
+    
+    with st.expander("🚨 DOSSIER PRIORITAIRE : Projet de Loi de Finances (PLF) 2027", expanded=True):
         st.markdown("""
-        **Loi n° 2021-1104 du 22 août 2021 portant lutte contre le dérèglement climatique**
-        *   **Geler les loyers :** Depuis le 24 août 2022, interdiction d'augmenter le loyer des logements classés F et G (lors du renouvellement du bail ou de la remise en location).
-        *   **Interdiction de mise en location (Critère de décence) :**
-            *   **1er janvier 2025 :** Interdiction pour les logements classés **G**.
-            *   **1er janvier 2028 :** Interdiction pour les logements classés **F**.
-            *   **1er janvier 2034 :** Interdiction pour les logements classés **E**.
-        *   **Audit énergétique obligatoire :** Lors de la vente de maisons individuelles ou de monopropriétés classées F ou G (depuis avril 2023), et bientôt E (2025).
+        **L'argumentaire à donner d'urgence à vos clients (S'applique dès le 1er janvier 2027 si voté) :**
+        *   **Plafonnement des amortissements LMNP :** L'article 7 du PLF prévoit de limiter la déduction de l'amortissement des locaux au régime réel à **2,5 % par an et 7 000 € par foyer fiscal** (et même 1,5 % et 5 000 € pour les meublés de tourisme). Un client avec un bien de 300 000 € va perdre une part massive de son avantage fiscal.
+        *   **Fin du report illimité :** C'est la mesure la plus punitive. Aujourd'hui, un amortissement non utilisé est reportable. Demain (dès 2027), les amortissements écartés par le nouveau plafond seraient **définitivement perdus**. 
+        *   **Action requise :** "Monsieur le client, il faut revendre avant le 31 décembre 2026 pour sécuriser votre capital avant que les acheteurs n'intègrent cette perte de rentabilité dans leurs offres."
+        *   **Bonne nouvelle (Nouveau Dispositif Jeanbrun) :** Le statut de bailleur privé vient d'être voté. Il permet d'amortir un logement loué **nu** en contrepartie d'un loyer encadré sur 9 ans. Une excellente piste de réinvestissement post-revente.
         """)
 
-    with st.expander("🏛️ Urbanisme & Droit des Sols (PLU, Permis, Déclarations)"):
+    with st.expander("📝 Rappel Climat & Dispositifs en fin de vie (Pinel, DPE)"):
         st.markdown("""
-        **Code de l'urbanisme et instruction des autorisations**
-        *   **Plan Local d'Urbanisme (PLU) :** Définit les règles d'aménagement et d'usage des sols. Indispensable pour évaluer le potentiel de constructibilité ou d'extension d'un foncier lors de l'estimation.
-        *   **Déclaration Préalable (DP) :** Obligatoire pour les modifications d'aspect extérieur, les changements de destination (sans travaux porteurs), et les extensions mineures (généralement entre 5 et 20m², ou 40m² en zone U). Délai d'instruction : 1 mois.
-        *   **Permis de Construire (PC) :** Requis pour les créations de surface de plancher supérieures à 20m² (ou 40m² en zone U du PLU) et les changements de destination avec modification des structures porteuses. Délai d'instruction : 2 à 3 mois.
-        *   **Certificat d'Urbanisme (CU) :** Le CU d'information (CUa) fige les règles d'urbanisme, le CU opérationnel (CUb) valide la faisabilité d'un projet précis.
-        """)
-
-    with st.expander("💶 Dispositifs Fiscaux & Amortissements (LMNP, LMP, Pinel, Denormandie)"):
-        st.markdown("""
-        *   **LMNP (Loueur en Meublé Non Professionnel) :** Permet d'amortir la valeur du bien et des meubles pour gommer la fiscalité des revenus locatifs. Souvent touché par les réformes fiscales récentes, c'est un point d'alerte à soulever lors de l'arbitrage.
-        *   **LMP (Loueur en Meublé Professionnel) :** Exige des recettes > 23 000 € ET supérieures aux autres revenus du foyer. Conditions de revente et plus-values professionnelles spécifiques.
-        *   **Loi Pinel :** Réduction d'impôt soumise à un engagement de location (6, 9 ou 12 ans). Les investisseurs arrivant au terme de leur engagement (généralement après 9 ans) sont d'excellents prospects pour la revente, l'avantage fiscal n'opérant plus.
-        *   **Loi Denormandie :** Prolongement du Pinel dans l'ancien avec travaux (25% du coût total de l'opération). Mêmes logiques de sortie de cycle que le Pinel.
-        *   **Dispositif Jean-Brun / Autres :** Connaître le cadre initial de l'acquisition permet de démontrer au propriétaire que son cycle de rentabilité optimal est terminé.
+        *   **DPE 2027 :** Le coefficient d'énergie primaire de l'électricité passera à 1,7 en 2027. Cela pourrait légèrement améliorer la note de certains biens chauffés à l'électrique.
+        *   **Calendrier des interdictions de louer :** G (1er janvier 2025), F (1er janvier 2028), E (1er janvier 2034).
+        *   **Loi Pinel :** Le dispositif s'est éteint fin 2024. Les investisseurs Pinel arrivant au terme de leur engagement (6 ou 9 ans) n'ont **plus aucun avantage fiscal** à conserver le bien.
         """)
