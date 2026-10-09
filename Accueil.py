@@ -20,9 +20,16 @@ if 'df_affichage' not in st.session_state:
 if 'analyse_terminee' not in st.session_state:
     st.session_state.analyse_terminee = False
 
+# --- FONCTION POUR IDENTIFIER LES VIDES ABSOLUS ---
+def est_vide(val):
+    if pd.isna(val): 
+        return True
+    val_str = str(val).strip().lower()
+    return val_str in ['nan', 'none', 'null', '', '<na>']
+
 # --- FONCTION POUR NETTOYER LES .0 ---
 def formater_numero(val):
-    if pd.isna(val) or str(val).lower() in ['nan', 'none', '']:
+    if est_vide(val):
         return ''
     val_str = str(val).strip()
     if val_str.endswith('.0'):
@@ -123,20 +130,17 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- NOUVEAU : EXCLUSION DES BIENS INEXPLOITABLES (SANS APT ET SANS ÉTAGE) ---
-        col_apt = 'N° Apt' if 'N° Apt' in df_affichage.columns else None
-        col_etage = 'Étage' if 'Étage' in df_affichage.columns else None
-
-        if col_apt and col_etage:
-            # On convertit en texte et on nettoie pour vérifier si c'est vide ou "None"
-            apt_val = df_affichage[col_apt].astype(str).str.strip().str.lower()
-            etage_val = df_affichage[col_etage].astype(str).str.strip().str.lower()
-            
-            mask_apt_vide = apt_val.isin(['nan', 'none', '<na>', 'null', ''])
-            mask_etage_vide = etage_val.isin(['nan', 'none', '<na>', 'null', ''])
-            
-            # On ne garde que les lignes où au moins un des deux N'EST PAS vide
-            df_affichage = df_affichage[~(mask_apt_vide & mask_etage_vide)]
+        # --- EXCLUSION 100% BLINDÉE DES BIENS INEXPLOITABLES (SANS APT ET SANS ÉTAGE) ---
+        if 'N° Apt' in df_affichage.columns and 'Étage' in df_affichage.columns:
+            # On ne garde la ligne QUE SI l'apt n'est pas vide OU l'étage n'est pas vide
+            mask_valide = df_affichage.apply(lambda row: not (est_vide(row.get('N° Apt')) and est_vide(row.get('Étage'))), axis=1)
+            df_affichage = df_affichage[mask_valide]
+        elif 'N° Apt' in df_affichage.columns:
+            mask_valide = df_affichage.apply(lambda row: not est_vide(row.get('N° Apt')), axis=1)
+            df_affichage = df_affichage[mask_valide]
+        elif 'Étage' in df_affichage.columns:
+            mask_valide = df_affichage.apply(lambda row: not est_vide(row.get('Étage')), axis=1)
+            df_affichage = df_affichage[mask_valide]
 
         # --- Filtrage Secteur ---
         if secteur != "Tous les secteurs":
