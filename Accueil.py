@@ -4,13 +4,7 @@ from datetime import datetime
 import os
 import requests
 
-# --- CONFIGURATION DU MENU ET DE LA NAVIGATION ---
-# Configuration de la page principale et des titres du menu
-page_1 = st.Page("Accueil.py", title="Stratégie 1 : DPE & Cycles", icon="🏢", default=True)
-page_2 = st.Page("pages/1_Strategie_2.py", title="Stratégie 2 : SCI & Alertes", icon="💼")
-
-pg = st.navigation([page_1, page_2])
-
+# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
     page_title="Stratégie 1 - Cabinet Honorat",
     page_icon="🏢",
@@ -148,7 +142,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- FILTRE ROBUSTE ET VECTORIEL SANS APPLY (FIN DU VALUEERROR) ---
+        # --- FILTRE ROBUSTE ET VECTORIEL SANS APPLY ---
         has_apt = 'N° Apt' in df_affichage.columns
         has_etage = 'Étage' in df_affichage.columns
         valeurs_vides = ['nan', 'none', 'null', '', '<na>']
