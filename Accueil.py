@@ -143,19 +143,25 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         
-        # Filtres de qualité stricts
+        # Filtres de qualité stricts (Doublons)
         colonnes_doublons = [col for col in ['Adresse Exacte', 'N° Apt', 'Étage', 'Date DPE'] if col in df_affichage.columns]
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- CORRECTION DE L'ERREUR ICI ---
-        # On sécurise la fonction pour s'assurer que la ligne ne plante pas si une info manque
-        def est_bien_routable(row):
-            apt_vide = est_vide(row.get('N° Apt')) if 'N° Apt' in df_affichage.columns else True
-            etage_vide = est_vide(row.get('Étage')) if 'Étage' in df_affichage.columns else True
-            return not (apt_vide and etage_vide)
-            
-        df_affichage = df_affichage[df_affichage.apply(est_bien_routable, axis=1)]
+        # --- FILTRE ROBUSTE POUR ÉVITER LE VALUEERROR ---
+        has_apt = 'N° Apt' in df_affichage.columns
+        has_etage = 'Étage' in df_affichage.columns
+        
+        if has_apt and has_etage:
+            mask_apt_ok = ~df_affichage['N° Apt'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
+            mask_etage_ok = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
+            df_affichage = df_affichage[mask_apt_ok | mask_etage_ok]
+        elif has_apt:
+            mask_apt_ok = ~df_affichage['N° Apt'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
+            df_affichage = df_affichage[mask_apt_ok]
+        elif has_etage:
+            mask_etage_ok = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(['nan', 'none', 'null', '', '<na>'])
+            df_affichage = df_affichage[mask_etage_ok]
 
         # Filtre de secteur
         if secteur != "Tous les secteurs":
