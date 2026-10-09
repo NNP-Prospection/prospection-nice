@@ -20,6 +20,16 @@ if 'analyse_terminee' not in st.session_state:
 
 # Chargement unique du fichier DPE existant
 try:
+    df_global = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
+    
+    # 🔍 AJOUTEZ CETTE LIGNE ICI POUR VOIR LES COLONNES SUR L'ÉCRAN :
+    st.write("🔍 **Colonnes présentes dans votre fichier DPE :**", list(df_global.columns))
+
+except Exception as e:
+    df_global = pd.DataFrame()
+    st.error(f"Erreur critique lors du chargement du fichier DPE : {e}")
+# Chargement unique du fichier DPE existant
+try:
     df_global = pd.read_csv('dpe_nice_fg.csv')
 except Exception as e:
     df_global = pd.DataFrame()
