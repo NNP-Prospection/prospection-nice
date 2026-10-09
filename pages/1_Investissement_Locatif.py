@@ -20,19 +20,39 @@ if 'df_locatif' not in st.session_state:
 if 'analyse_locative_terminee' not in st.session_state:
     st.session_state.analyse_locative_terminee = False
 
-# --- CHARGEMENT DES DONNÉES DVF (Mise en cache) ---
+import os
+
+# --- CHARGEMENT DES FICHIERS DVF LOCAUX (Avec diagnostic) ---
 @st.cache_data
 def load_dvf():
-    url_dvf = "https://files.data.gouv.fr/geo-dvf/latest/csv/2023/departements/06.csv.gz"
-    df = pd.read_csv(url_dvf, compression='gzip', low_memory=False)
-    
-    # Renommer les colonnes géographiques pour la compatibilité
-    if 'latitude' in df.columns and 'longitude' in df.columns:
-        df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+    try:
+        dossier = 'data_dvf'
+        if os.path.exists(dossier):
+            fichiers = [os.path.join(dossier, f) for f in os.listdir(dossier) if f.endswith('.csv')]
+            st.write(f"🔍 Fichiers CSV détectés dans {dossier} : {fichiers}") # Permet de voir si les fichiers sont bien là
+        else:
+            st.error(f"Le dossier '{dossier}' est introuvable sur GitHub !")
+            return pd.DataFrame()
+            
+        if not fichiers:
+            st.warning("Le dossier data_dvf existe mais aucun fichier .csv n'a été trouvé à l'intérieur.")
+            return pd.DataFrame()
+            
+        liste_df = [pd.read_csv(f, low_memory=False) for f in fichiers]
+        df = pd.concat(liste_df, ignore_index=True)
+        df = df.drop_duplicates()
         
-    df_nice = df[df['code_commune'] == '06088'].dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
-    df_nice['prix_m2'] = df_nice['valeur_fonciere'] / df_nice['surface_reelle_bati']
-    return df_nice[(df_nice['prix_m2'] > 1000) & (df_nice['prix_m2'] < 25000)]
+        if 'latitude' in df.columns and 'longitude' in df.columns:
+            df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+            
+        df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
+        df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
+        
+        return df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
+    except Exception as e:
+        st.error(f"Erreur lors du chargement des fichiers DVF : {e}")
+        return pd.DataFrame()
+
 
 
 def filter_carre_dor(df, lat_col='lat', lon_col='lon'):
