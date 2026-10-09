@@ -25,9 +25,15 @@ if 'analyse_locative_terminee' not in st.session_state:
 def load_dvf():
     url_dvf = "https://files.data.gouv.fr/geo-dvf/latest/csv/2023/departements/06.csv.gz"
     df = pd.read_csv(url_dvf, compression='gzip', low_memory=False)
+    
+    # Renommer les colonnes géographiques pour la compatibilité
+    if 'latitude' in df.columns and 'longitude' in df.columns:
+        df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
+        
     df_nice = df[df['code_commune'] == '06088'].dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
     df_nice['prix_m2'] = df_nice['valeur_fonciere'] / df_nice['surface_reelle_bati']
     return df_nice[(df_nice['prix_m2'] > 1000) & (df_nice['prix_m2'] < 25000)]
+
 
 def filter_carre_dor(df, lat_col='lat', lon_col='lon'):
     # Boîte de délimitation pour le Carré d'Or / Promenade
