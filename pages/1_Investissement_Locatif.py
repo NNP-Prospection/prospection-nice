@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import folium
+from streamlit_folium import st_folium
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -18,12 +20,39 @@ if 'df_locatif' not in st.session_state:
 if 'analyse_locative_terminee' not in st.session_state:
     st.session_state.analyse_locative_terminee = False
 
-# Chargement du fichier source (on peut réutiliser le fichier DPE ou un fichier dédié si existant)
+# --- CHARGEMENT DES DONNÉES DVF (Mise en cache) ---
+@st.cache_data
+def load_dvf():
+    url_dvf = "https://files.data.gouv.fr/geo-dvf/latest/csv/2023/departements/06.csv.gz"
+    df = pd.read_csv(url_dvf, compression='gzip', low_memory=False)
+    df_nice = df[df['code_commune'] == '06088'].dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
+    df_nice['prix_m2'] = df_nice['valeur_fonciere'] / df_nice['surface_reelle_bati']
+    return df_nice[(df_nice['prix_m2'] > 1000) & (df_nice['prix_m2'] < 25000)]
+
+def filter_carre_dor(df, lat_col='lat', lon_col='lon'):
+    # Boîte de délimitation pour le Carré d'Or / Promenade
+    lat_min, lat_max = 43.6930, 43.6995
+    lon_min, lon_max = 7.2560, 7.2670
+    
+    if lat_col in df.columns and lon_col in df.columns:
+        mask = (df[lat_col] >= lat_min) & (df[lat_col] <= lat_max) & \
+               (df[lon_col] >= lon_min) & (df[lon_col] <= lon_max)
+        return df[mask]
+    return pd.DataFrame()
+
+# Chargement DVF
+try:
+    df_dvf = load_dvf()
+except Exception as e:
+    df_dvf = pd.DataFrame()
+    st.error(f"Erreur lors du chargement DVF : {e}")
+
+# Chargement DPE
 try:
     df_global = pd.read_csv('dpe_nice_fg.csv')
 except Exception as e:
     df_global = pd.DataFrame()
-    st.error(f"Erreur critique lors du chargement des données : {e}")
+    st.error(f"Erreur critique lors du chargement des données DPE : {e}")
 
 # --- BARRE LATÉRALE DE RECHERCHE INVESTISSEUR ---
 st.sidebar.header("🎯 Ciblage Investisseurs & SCI")
@@ -43,7 +72,7 @@ if st.sidebar.button("Générer le listing Investisseurs / SCI", type="primary")
     if not df_global.empty:
         df_res = df_global.copy()
         
-        # Filtrage ciblé sur les structures sociétaires (SCI, SARL, etc.) si la colonne existe, ou simulation d'analyse patrimoniale
+        # Filtrage ciblé sur les structures sociétaires (SCI, SARL, etc.)
         colonnes_locatif = {}
         for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
             if col in df_res.columns: colonnes_locatif[col] = 'Adresse Exacte'; break
@@ -61,12 +90,11 @@ if st.sidebar.button("Générer le listing Investisseurs / SCI", type="primary")
         df_affichage = df_res[list(colonnes_locatif.keys())].rename(columns=colonnes_locatif)
         df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
 
-        # Filtrage pour ne garder idéalement que les entités ou profils investisseurs si la colonne propriétaire existe
+        # Filtrage pour ne garder idéalement que les entités ou profils investisseurs
         if 'Propriétaire / SCI' in df_affichage.columns:
-            # On met en avant les SCI / structures ou on garde une base qualifiée investisseur
             mask_sci = df_affichage['Propriétaire / SCI'].astype(str).str.upper().str.contains("SCI|SARL|SAS|HOLDING|IMMOBILIERE", na=False)
             if mask_sci.sum() > 0:
-                df_affichage = df_affichage[mask_sci] # Priorité aux structures si présentes
+                df_affichage = df_affichage[mask_sci] 
 
         # Découpage du lot
         idx_deb = (int(tranche_lot_loc.split()[1]) - 1) * 50
@@ -74,12 +102,14 @@ if st.sidebar.button("Générer le listing Investisseurs / SCI", type="primary")
         st.session_state.analyse_locative_terminee = True
 
 
-# --- AFFICHAGE PRINCIPAL EN 2 ONGLETS ---
+# --- AFFICHAGE PRINCIPAL EN 3 ONGLETS ---
 if st.session_state.analyse_locative_terminee:
     
-    tab1, tab2 = st.tabs([
+    # AJOUT D'UN TROISIÈME ONGLET POUR LA CARTE
+    tab1, tab2, tab3 = st.tabs([
         "📊 1. Listing Investisseurs & SCI", 
-        "✉️ 2. Publipostage & Impression des Courriers"
+        "✉️ 2. Publipostage & Impression",
+        "🗺️ 3. Cartographie DVF & DPE (Carré d'Or)"
     ])
     
     with tab1:
@@ -143,5 +173,52 @@ if st.session_state.analyse_locative_terminee:
                         key=f"courrier_loc_{adresse}"
                     )
                     st.markdown("---")
+                    
+    with tab3:
+        st.header("🗺️ Analyse Spatiale : DVF & DPE (Carré d'Or)")
+        st.write("Visualisez instantanément les passoires thermiques et les dernières ventes immobilières pour repérer les meilleures opportunités de déficit foncier.")
+        
+        if not df_dvf.empty and not df_global.empty:
+            # Filtrage sur le Carré d'Or
+            dvf_carre_dor = filter_carre_dor(df_dvf)
+            dpe_carre_dor = filter_carre_dor(df_global)
+            
+            # Affichage des métriques clés
+            col1, col2 = st.columns(2)
+            col1.metric("Ventes DVF (Carré d'Or)", len(dvf_carre_dor))
+            col2.metric("Passoires thermiques (F/G)", len(dpe_carre_dor))
+            
+            # Création de la carte
+            m = folium.Map(location=[43.696, 7.262], zoom_start=15, tiles="CartoDB positron")
+            
+            layer_dvf = folium.FeatureGroup(name="Ventes DVF (Points Bleus)")
+            layer_dpe = folium.FeatureGroup(name="DPE F & G (Points Rouges)")
+            
+            # Intégration des points DVF
+            for idx, row in dvf_carre_dor.iterrows():
+                popup_text = f"<b>{row.get('type_local', 'Bien')}</b><br>Prix: {row['valeur_fonciere']:,.0f} €<br>Prix/m²: {row['prix_m2']:,.0f} €"
+                folium.CircleMarker(
+                    location=[row['lat'], row['lon']], radius=5, color='blue',
+                    fill=True, popup=folium.Popup(popup_text, max_width=200)
+                ).add_to(layer_dvf)
+                
+            # Intégration des points DPE
+            for idx, row in dpe_carre_dor.iterrows():
+                etiquette = row.get('etiquette_dpe', 'F/G')
+                popup_text = f"<b>Passoire Thermique</b><br>Étiquette: {etiquette}"
+                folium.CircleMarker(
+                    location=[row['lat'], row['lon']], radius=4, color='red',
+                    fill=True, popup=folium.Popup(popup_text, max_width=200)
+                ).add_to(layer_dpe)
+                
+            layer_dvf.add_to(m)
+            layer_dpe.add_to(m)
+            folium.LayerControl().add_to(m)
+            
+            # Affichage dans l'application
+            st_folium(m, width=900, height=500)
+        else:
+            st.warning("En attente du chargement complet des bases DVF et DPE.")
+            
 else:
     st.info("👉 Sélectionnez vos critères dans la barre latérale, puis cliquez sur **'Générer le listing Investisseurs / SCI'**.")
