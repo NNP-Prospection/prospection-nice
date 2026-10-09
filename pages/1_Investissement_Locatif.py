@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import requests
+import time
 
 st.set_page_config(
     page_title="Investissement Locatif & SCI - Cabinet Honorat", 
@@ -14,19 +15,18 @@ st.markdown("Ciblage spécifique des structures sociétaires (SCI), détection d
 
 # --- FONCTION POUR NETTOYER LES .0 ---
 def formater_numero(val):
-    if pd.isna(val) or str(val).lower() in ['nan', 'none', '']:
-        return ''
+    if pd.isna(val) or str(val).lower() in ['nan', 'none', '']: return ''
     val_str = str(val).strip()
-    if val_str.endswith('.0'):
-        return val_str[:-2]
+    if val_str.endswith('.0'): return val_str[:-2]
     return val_str
 
-# --- FONCTION API SIRENE ENRICHIE (INPI & BODACC) ---
-@st.cache_data
+# --- FONCTION API SIRENE ENRICHIE ---
+@st.cache_data(show_spinner=False)
 def enrichir_avec_sirene(adresse_str):
     try:
-        url = f"https://recherche-entreprises.api.gouv.fr/recherche?q={adresse_str}&per_page=1"
-        reponse = requests.get(url, timeout=3)
+        url = "https://recherche-entreprises.api.gouv.fr/recherche"
+        # Utilisation de 'params' pour gérer proprement les espaces dans l'adresse
+        reponse = requests.get(url, params={'q': adresse_str, 'per_page': 1}, timeout=3)
         if reponse.status_code == 200:
             data = reponse.json()
             resultats = data.get('results', [])
@@ -35,7 +35,6 @@ def enrichir_avec_sirene(adresse_str):
                 nom = entite.get('nom_raison_sociale', '')
                 siren = entite.get('siren', '')
                 
-                # Dirigeants / INPI
                 dirigeants = entite.get('dirigeants', [])
                 nom_gerant = ""
                 if dirigeants:
@@ -43,11 +42,10 @@ def enrichir_avec_sirene(adresse_str):
                     patronyme = dirigeants[0].get('nom', '')
                     nom_gerant = f"{prenom} {patronyme}".strip()
                 
-                # Détection BODACC / Statut
                 etat_admin = entite.get('etat_administratif', 'A') 
                 alerte_bodacc = "Actif"
                 if etat_admin == 'C':
-                    alerte_bodacc = "🚨 CESSATION / LIQUIDATION (BODACC)"
+                    alerte_bodacc = "🚨 CESSATION / LIQUIDATION"
                 
                 siege = entite.get('siege', {}).get('adresse', adresse_str)
                 
@@ -66,25 +64,27 @@ def enrichir_avec_sirene(adresse_str):
 # --- CHARGEMENT DPE ---
 @st.cache_data
 def load_data():
-    df_dvf = pd.DataFrame()
     df_dpe = pd.DataFrame()
     try:
         df_dpe = pd.read_csv('dpe_nice_fg.csv', low_memory=False)
     except:
         pass
-    return df_dvf, df_dpe
+    return df_dpe
 
-df_dvf, df_dpe = load_data()
+df_dpe = load_data()
 
 # --- NAVIGATION PAR ONGLET ---
-tab1, tab2 = st.tabs([
-    "📊 1. Radar des SCI & Investisseurs", 
-    "✉️ 2. Publipostage Stratégique"
-])
+tab1, tab2 = st.tabs(["📊 1. Radar des SCI & Investisseurs", "✉️ 2. Publipostage Stratégique"])
 
 with tab1:
     st.subheader("Ciblage et Qualification des SCI")
-    secteur = st.selectbox("Quartier / Secteur", ["Tous les secteurs", "Carré d'Or", "Promenade des Anglais", "Musiciens"])
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        secteur = st.selectbox("Quartier / Secteur", ["Tous les secteurs", "Carré d'Or", "Promenade des Anglais", "Musiciens", "Mont Boron", "Port / Garibaldi"])
+    with col2:
+        # On ajoute ENFIN le sélecteur de Lots pour pouvoir explorer toute la base !
+        tranche_mois = st.selectbox("Choisir le lot à analyser", ["Lot 1 (1 - 50)", "Lot 2 (51 - 100)", "Lot 3 (101 - 150)", "Lot 4 (151 - 200)", "Lot 5 (201 - 250)"])
     
     if st.button("Lancer le radar à SCI", type="primary"):
         if not df_dpe.empty:
@@ -96,19 +96,30 @@ with tab1:
                      rues_quartiers = {
                         "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt"],
                         "Promenade des Anglais": ["promenade des anglais", "etats-unis", "quai des etats-unis"],
-                        "Musiciens": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo"]
+                        "Musiciens": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo"],
+                        "Mont Boron": ["mont boron", "jean lorrain", "carnot", "germaine", "andre joly", "valrose", "cap de nice"],
+                        "Port / Garibaldi": ["garibaldi", "lunel", "cassini", "barla", "arson", "republique", "port"]
                     }
                      mots_cles = rues_quartiers.get(secteur, [])
                      if mots_cles:
                          pattern = '|'.join(mots_cles)
                          df_recherche = df_recherche[df_recherche[col_adresse].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-                # On scanne un lot de 30 adresses pour trouver des SCI (pour ne pas bloquer l'API)
-                adresses_a_tester = df_recherche[col_adresse].dropna().unique()[:30]
+                # Extraction du Lot sélectionné (50 adresses UNIQUES max par clic)
+                index_debut = (int(tranche_mois.split()[1]) - 1) * 50
+                adresses_uniques = df_recherche[col_adresse].dropna().unique()
+                adresses_a_tester = adresses_uniques[index_debut:index_debut + 50]
+                
                 data_rows = []
                 
-                with st.spinner("Analyse INPI/BODACC en cours... (Recherche de SCI)"):
-                    for adresse in adresses_a_tester:
+                if len(adresses_a_tester) > 0:
+                    st.write(f"🔍 **Analyse de {len(adresses_a_tester)} adresses sur {secteur}...**")
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    for i, adresse in enumerate(adresses_a_tester):
+                        status_text.text(f"Recherche INPI en cours ({i+1}/{len(adresses_a_tester)}) : {adresse}")
+                        
                         infos = enrichir_avec_sirene(adresse)
                         if infos: 
                             ligne_dpe = df_recherche[df_recherche[col_adresse] == adresse].iloc[0]
@@ -122,18 +133,26 @@ with tab1:
                                 'N° Apt': formater_numero(ligne_dpe.get('numero_appartement', ligne_dpe.get('numero_appt', ''))),
                                 'Étage': formater_numero(ligne_dpe.get('etage', ''))
                             })
+                        
+                        # Petite pause pour respecter l'API du gouvernement
+                        time.sleep(0.1)
+                        progress_bar.progress((i + 1) / len(adresses_a_tester))
+                    
+                    status_text.text("✅ Analyse terminée !")
                 
                 st.session_state.df_locatif = pd.DataFrame(data_rows)
                 if st.session_state.df_locatif.empty:
-                    st.warning("Aucune structure sociétaire n'a été détectée sur cet échantillon d'adresses.")
+                    st.warning(f"Aucune structure sociétaire n'a été détectée dans ce {tranche_mois}. Essayez de scanner le lot suivant !")
             else:
                 st.error("Colonne d'adresse introuvable.")
         else:
             st.error("Fichier DPE non chargé.")
 
     if 'df_locatif' in st.session_state and not st.session_state.df_locatif.empty:
-        st.success(f"✅ {len(st.session_state.df_locatif)} structures et SCI identifiées.")
-        event_selection_loc = st.dataframe(st.session_state.df_locatif, use_container_width=True, on_select="rerun", selection_mode="multi-row")
+        st.success(f"🎯 BINGO : {len(st.session_state.df_locatif)} structures/SCI identifiées dans ce lot !")
+        # CACHER L'INDEX ICI AUSSI
+        event_selection_loc = st.dataframe(st.session_state.df_locatif, use_container_width=True, on_select="rerun", selection_mode="multi-row", hide_index=True)
+        st.download_button("📥 Télécharger le listing", data=st.session_state.df_locatif.to_csv(index=False).encode('utf-8'), file_name="listing_sci.csv", mime='text/csv')
 
 with tab2:
     st.subheader("✉️ Publipostage Investisseur & SCI")
@@ -154,19 +173,17 @@ with tab2:
                 gerant = ligne_bien.get('Gérant / Contact', '')
                 siege = ligne_bien.get('Siège Social', adresse)
                 statut = ligne_bien.get('Statut / BODACC', '')
-                apt = ligne_bien.get('N° Apt', '')
-                etage = ligne_bien.get('Étage', '')
+                apt = formater_numero(ligne_bien.get('N° Apt', ''))
+                etage = formater_numero(ligne_bien.get('Étage', ''))
                 
                 infos_repere = []
                 if etage: infos_repere.append(f"Étage : {etage}")
                 if apt: infos_repere.append(f"Apt {apt}")
                 str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
 
-                # En-tête ciblé SCI
                 en_tete = f"Destinataire : {structure}\nSiège social : {siege}"
                 appel = f"À l'attention de {gerant}," if gerant else "À l'attention de la Gérance,"
                 
-                # Stratégie textuelle adaptée
                 strategie = "Dans le cadre des évolutions de la fiscalité immobilière (régime LMNP, fiscalité des SCI, loi de finances), l'anticipation de la gestion de votre portefeuille est essentielle pour sécuriser votre rentabilité nette et optimiser la transmission ou la revente de vos actifs."
                 
                 if "CESSATION" in statut:
@@ -199,7 +216,6 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                 
                 st.text_area(f"Modèle de courrier - {adresse}", courrier_texte, height=350, key=f"courrier_loc_{adresse}")
                 
-                # Logo en signature
                 logo_path = "Cabinet Immobilier Privé HONORAT.png"
                 if os.path.exists(logo_path):
                     st.image(logo_path, width=200)
