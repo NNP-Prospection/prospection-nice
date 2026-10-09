@@ -13,11 +13,20 @@ st.set_page_config(
 st.title("🏢 Espace Investissement Locatif & SCI - Nice")
 st.markdown("Ciblage des lots d'investissement (Passoires) et détection des sièges sociaux de SCI (INPI/BODACC).")
 
+# --- FONCTION POUR IDENTIFIER LES VIDES ---
+def est_vide(val):
+    if pd.isna(val): 
+        return True
+    val_str = str(val).strip().lower()
+    return val_str in ['nan', 'none', 'null', '', '<na>']
+
 # --- FONCTION POUR NETTOYER LES .0 ---
 def formater_numero(val):
-    if pd.isna(val) or str(val).lower() in ['nan', 'none', 'null', '', '<na>']: return ''
+    if est_vide(val): 
+        return ''
     val_str = str(val).strip()
-    if val_str.endswith('.0'): return val_str[:-2]
+    if val_str.endswith('.0'): 
+        return val_str[:-2]
     return val_str
 
 # --- FONCTION API SIRENE ---
@@ -83,7 +92,11 @@ with tab1:
     if st.button("Lancer le radar", type="primary"):
         if not df_dpe.empty:
             df_recherche = df_dpe.copy()
+            
+            # --- CORRECTION ICI : Détection intelligente des colonnes ---
             col_adresse = next((col for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete'] if col in df_recherche.columns), None)
+            col_apt = next((col for col in df_recherche.columns if 'appartement' in col.lower() or 'porte' in col.lower() or 'numero_appt' in col.lower()), None)
+            col_etage = next((col for col in df_recherche.columns if 'etage' in col.lower() or 'niveau' in col.lower()), None)
             
             if col_adresse:
                 if secteur != "Tous les secteurs":
@@ -114,12 +127,15 @@ with tab1:
                         infos = enrichir_avec_sirene(adresse)
                         ligne_dpe = df_recherche[df_recherche[col_adresse] == adresse].iloc[0]
                         
-                        apt = formater_numero(ligne_dpe.get('numero_appartement', ligne_dpe.get('numero_appt', '')))
-                        etage = formater_numero(ligne_dpe.get('etage', ''))
+                        # Utilisation des colonnes trouvées dynamiquement
+                        apt_brut = ligne_dpe[col_apt] if col_apt else ''
+                        etage_brut = ligne_dpe[col_etage] if col_etage else ''
+                        
+                        apt = formater_numero(apt_brut)
+                        etage = formater_numero(etage_brut)
                         
                         # Filtre strict : on ne garde que s'il y a un repère physique exploitable
                         if apt or etage:
-                            # --- LE CHANGEMENT EST ICI : On garde la ligne MÊME SI l'INPI ne trouve rien ---
                             if infos:
                                 statut_inpi = f"✅ Siège trouvé : {infos['structure']}"
                                 alerte = infos['statut_bodacc']
@@ -179,13 +195,11 @@ with tab2:
                 if apt: infos_repere.append(f"Apt {apt}")
                 str_reperage = " | ".join(infos_repere) if infos_repere else "Actif identifié"
 
-                # Si on a eu la chance de trouver le siège de la SCI sur place
                 if "Siège trouvé" in statut_inpi:
                     nom_sci = statut_inpi.split(": ")[1]
                     en_tete = f"Destinataire : {nom_sci}\nSiège social : {adresse}"
                     appel = "À l'attention de la Gérance,"
                 else:
-                    # Le cas majoritaire : l'investisseur est domicilié ailleurs
                     en_tete = f"Destinataire : Propriétaire / Investisseur\nLocalisation de l'actif : {str_reperage}"
                     appel = f"Madame, Monsieur (Investisseur - {str_reperage}),"
                 
