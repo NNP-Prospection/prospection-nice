@@ -118,13 +118,27 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         df_affichage = df_affichage.loc[:, ~df_affichage.columns.duplicated()]
 
-        # --- NOUVEAU : NETTOYAGE DES DOUBLONS DE LA BASE DPE ---
-        # On supprime les lignes qui ont exactement la même adresse et le même n° d'appartement
+        # --- NETTOYAGE DES DOUBLONS ---
         colonnes_doublons = [col for col in ['Adresse Exacte', 'N° Apt', 'Étage', 'Date DPE'] if col in df_affichage.columns]
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # Filtrage Secteur
+        # --- NOUVEAU : EXCLUSION DES BIENS INEXPLOITABLES (SANS APT ET SANS ÉTAGE) ---
+        col_apt = 'N° Apt' if 'N° Apt' in df_affichage.columns else None
+        col_etage = 'Étage' if 'Étage' in df_affichage.columns else None
+
+        if col_apt and col_etage:
+            # On convertit en texte et on nettoie pour vérifier si c'est vide ou "None"
+            apt_val = df_affichage[col_apt].astype(str).str.strip().str.lower()
+            etage_val = df_affichage[col_etage].astype(str).str.strip().str.lower()
+            
+            mask_apt_vide = apt_val.isin(['nan', 'none', '<na>', 'null', ''])
+            mask_etage_vide = etage_val.isin(['nan', 'none', '<na>', 'null', ''])
+            
+            # On ne garde que les lignes où au moins un des deux N'EST PAS vide
+            df_affichage = df_affichage[~(mask_apt_vide & mask_etage_vide)]
+
+        # --- Filtrage Secteur ---
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt"],
@@ -139,7 +153,7 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse temporelle
+        # --- Analyse temporelle ---
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -179,9 +193,8 @@ if st.session_state.analyse_terminee:
     ])
     
     with tab1:
-        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés avec repères.")
+        st.success(f"✅ Listing généré ! **{len(st.session_state.df_affichage)}** biens ciblés (exploitable pour publipostage).")
         
-        # --- NOUVEAU : CACHER L'INDEX (hide_index=True) ---
         event_selection = st.dataframe(
             st.session_state.df_affichage, 
             use_container_width=True, 
@@ -196,7 +209,6 @@ if st.session_state.analyse_terminee:
         if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
             df_cycle = st.session_state.df_affichage[st.session_state.df_affichage['Profil & Stratégie'].str.contains("Cycle ~5 ans", na=False)]
             if not df_cycle.empty:
-                # --- NOUVEAU : CACHER L'INDEX ICI AUSSI ---
                 st.dataframe(df_cycle, use_container_width=True, hide_index=True)
             else:
                 st.info("ℹ️ Aucun bien ne correspond à ce critère dans ce lot.")
