@@ -120,29 +120,45 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
+        # --- SÉCURITÉ ANTI-DOUBLONS DE COLONNES ---
         colonnes_a_garder = {}
         for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
             if col in df_resultats.columns:
                 colonnes_a_garder[col] = 'Adresse Exacte'
                 break
                 
+        # On verrouille pour ne prendre qu'une seule colonne de chaque type
+        cibles = {'Étage': False, 'N° Apt': False, 'N° Lot': False, 'Bâtiment': False, 'Note DPE': False, 'Date DPE': False}
+        
         for col in df_resultats.columns:
             c = col.lower()
-            if 'etage' in c or 'niveau' in c: colonnes_a_garder[col] = 'Étage'
-            elif 'appartement' in c or 'porte' in c or 'numero_appt' in c: colonnes_a_garder[col] = 'N° Apt'
-            elif 'lot' in c: colonnes_a_garder[col] = 'N° Lot'
-            elif 'batiment' in c or 'bat' in c: colonnes_a_garder[col] = 'Bâtiment'
-            elif 'etiquette' in c and 'dpe' in c: colonnes_a_garder[col] = 'Note DPE'
-            elif 'date' in c and 'dpe' in c: colonnes_a_garder[col] = 'Date DPE'
+            if not cibles['Étage'] and ('etage' in c or 'niveau' in c):
+                colonnes_a_garder[col] = 'Étage'
+                cibles['Étage'] = True
+            elif not cibles['N° Apt'] and ('appartement' in c or 'porte' in c or 'numero_appt' in c):
+                colonnes_a_garder[col] = 'N° Apt'
+                cibles['N° Apt'] = True
+            elif not cibles['N° Lot'] and ('lot' in c):
+                colonnes_a_garder[col] = 'N° Lot'
+                cibles['N° Lot'] = True
+            elif not cibles['Bâtiment'] and ('batiment' in c or 'bat' in c):
+                colonnes_a_garder[col] = 'Bâtiment'
+                cibles['Bâtiment'] = True
+            elif not cibles['Note DPE'] and ('etiquette' in c and 'dpe' in c):
+                colonnes_a_garder[col] = 'Note DPE'
+                cibles['Note DPE'] = True
+            elif not cibles['Date DPE'] and ('date' in c and 'dpe' in c):
+                colonnes_a_garder[col] = 'Date DPE'
+                cibles['Date DPE'] = True
 
         df_affichage = df_resultats[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
         
-        # Filtres de qualité stricts (Doublons)
+        # Filtres de qualité stricts (Doublons de lignes)
         colonnes_doublons = [col for col in ['Adresse Exacte', 'N° Apt', 'Étage', 'Date DPE'] if col in df_affichage.columns]
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- FILTRE ROBUSTE ET VECTORIEL SANS APPLY ---
+        # --- FILTRE ROBUSTE ---
         has_apt = 'N° Apt' in df_affichage.columns
         has_etage = 'Étage' in df_affichage.columns
         valeurs_vides = ['nan', 'none', 'null', '', '<na>']
