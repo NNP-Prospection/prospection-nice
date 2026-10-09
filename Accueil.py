@@ -5,13 +5,13 @@ import os
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Espace de Prospection - Cabinet Privé Immobilier Honorat",
+    page_title="Espace de Prospection - Cabinet Honorat",
     page_icon="🏠",
     layout="wide"
 )
 
 st.title("🏠 Mon espace de prospection immobilière - Nice")
-st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et Publipostage - Cabinet Privé Immobilier Honorat.")
+st.markdown("Base de données certifiée : Passoires F/G, Cycle ~5 ans (DPE) et Publipostage patrimonial.")
 
 # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
 if 'df_affichage' not in st.session_state:
@@ -25,6 +25,15 @@ try:
 except Exception as e:
     df_global = pd.DataFrame()
     st.error(f"Erreur critique lors du chargement du fichier DPE : {e}")
+
+# --- FONCTION POUR NETTOYER LES .0 ---
+def formater_numero(val):
+    if pd.isna(val) or str(val).lower() in ['nan', 'none', '']:
+        return ''
+    val_str = str(val).strip()
+    if val_str.endswith('.0'):
+        return val_str[:-2]
+    return val_str
 
 # --- BARRE LATÉRALE DE RECHERCHE ---
 st.sidebar.header("🎯 Critères de ciblage")
@@ -158,14 +167,7 @@ if st.session_state.analyse_terminee:
                 st.download_button("📥 Télécharger le listing Cycle 5 ans (CSV)", data=df_cycle.to_csv(index=False).encode('utf-8'), file_name="cycle_5ans_dpe.csv", mime='text/csv')
 
     with tab3:
-        st.header("✉️ Publipostage Cible & Impression - Cabinet Privé Immobilier HONORAT")
-        
-        # Affichage du logo si présent dans le dossier du projet
-        logo_path = "Cabinet Immobilier Privé HONORAT.png"
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=300)
-        else:
-            st.markdown("### **CABINET PRIVÉ IMMOBILIER HONORAT**\n*TRANSACTION . CONSEIL . PATRIMOINE*")
+        st.header("✉️ Publipostage Cible & Impression")
         
         if 'Adresse Exacte' in st.session_state.df_affichage.columns:
             liste_adresses = st.session_state.df_affichage['Adresse Exacte'].dropna().unique().tolist()
@@ -195,16 +197,17 @@ if st.session_state.analyse_terminee:
                     profil = ligne_bien.get('Profil & Stratégie', '')
                     proprietaire = ligne_bien.get('Propriétaire / SCI', '')
                     
-                    apt = ligne_bien.get('N° Apt', '')
-                    lot = ligne_bien.get('N° Lot', '')
-                    etage = ligne_bien.get('Étage', '')
-                    bat = ligne_bien.get('Bâtiment', '')
+                    # Application du nettoyage pour enlever les .0
+                    apt = formater_numero(ligne_bien.get('N° Apt', ''))
+                    lot = formater_numero(ligne_bien.get('N° Lot', ''))
+                    etage = formater_numero(ligne_bien.get('Étage', ''))
+                    bat = formater_numero(ligne_bien.get('Bâtiment', ''))
                     
                     infos_repere = []
-                    if bat and str(bat).lower() != 'nan': infos_repere.append(f"Bât. {bat}")
-                    if etage and str(etage).lower() != 'nan': infos_repere.append(f"Étage : {etage}")
-                    if apt and str(apt).lower() != 'nan': infos_repere.append(f"Apt {apt}")
-                    if lot and str(lot).lower() != 'nan': infos_repere.append(f"Lot n° {lot}")
+                    if bat: infos_repere.append(f"Bât. {bat}")
+                    if etage: infos_repere.append(f"Étage : {etage}")
+                    if apt: infos_repere.append(f"Apt {apt}")
+                    if lot: infos_repere.append(f"Lot n° {lot}")
                     str_reperage = " | ".join(infos_repere) if infos_repere else "Bien identifié"
 
                     # Gestion propre du destinataire
@@ -218,9 +221,7 @@ if st.session_state.analyse_terminee:
                     st.markdown(f"### 📍 {adresse}")
                     st.markdown(f"**Ciblage :** `{str_reperage}` | **Profil :** `{profil}`")
                     
-                    courrier_modele = f"""CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE
-Nice, le {date_jour}
+                    courrier_modele = f"""Nice, le {date_jour}
 
 {destinataire_affichage}
 Adresse du bien : {adresse}
@@ -229,7 +230,7 @@ Adresse du bien : {adresse}
 
 Objet : Anticipation réglementaire, valorisation et optimisation de votre actif immobilier au {adresse} ({str_reperage})
 
-En qualité de Conseil en Immobilier Patrimonial pour le Cabinet Privé Immobilier Honorat à Nice, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble. 
+En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble. 
 
 Au regard des récentes évolutions de la législation énergétique (calendrier d'interdiction de mise en location des passoires thermiques F et G) et de la fiscalité (régime LMNP, optimisation de la valeur vénale), l'anticipation de la gestion de votre patrimoine est devenue un enjeu majeur pour sécuriser votre rentabilité nette et éviter toute décote de votre bien.
 
@@ -239,14 +240,22 @@ Bien cordialement,
 
 Nathalie Parra
 Conseil en Immobilier Patrimonial
-Cabinet Privé Immobilier Honorat - Nice"""
+
+CABINET PRIVÉ IMMOBILIER HONORAT
+TRANSACTION . CONSEIL . PATRIMOINE"""
 
                     st.text_area(
                         f"📄 Modèle de courrier - {adresse}", 
                         value=courrier_modele, 
-                        height=270,
+                        height=280,
                         key=f"courrier_{adresse}"
                     )
+                    
+                    # Affichage du logo sous le texte du courrier
+                    logo_path = "Cabinet Immobilier Privé HONORAT.png"
+                    if os.path.exists(logo_path):
+                        st.image(logo_path, width=200)
+                        
                     st.markdown("---")
 else:
     st.info("👉 Sélectionnez vos critères à gauche, puis cliquez sur **'Générer le listing certifié'**.")
