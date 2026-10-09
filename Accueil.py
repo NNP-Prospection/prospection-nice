@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import requests
+import pydeck as pdk
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -146,7 +147,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
     if not df_global.empty:
         df_resultats = df_global.copy()
         
-        # --- SÉCURITÉ ANTI-DOUBLONS DE COLONNES ---
         colonnes_a_garder = {}
         for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete']:
             if col in df_resultats.columns:
@@ -182,7 +182,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
         if colonnes_doublons:
             df_affichage = df_affichage.drop_duplicates(subset=colonnes_doublons, keep='first')
 
-        # --- FILTRE ROBUSTE ---
         has_apt = 'N° Apt' in df_affichage.columns
         has_etage = 'Étage' in df_affichage.columns
         valeurs_vides = ['nan', 'none', 'null', '', '<na>']
@@ -198,7 +197,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
             mask_etage_valide = ~df_affichage['Étage'].astype(str).str.strip().str.lower().isin(valeurs_vides)
             df_affichage = df_affichage[mask_etage_valide]
 
-        # Filtre de secteur
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt"],
@@ -213,7 +211,6 @@ if st.sidebar.button("Générer le listing certifié", type="primary"):
                 pattern = '|'.join(mots_cles)
                 df_affichage = df_affichage[df_affichage['Adresse Exacte'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Analyse Cycle 5 ans
         if 'Date DPE' in df_affichage.columns:
             df_affichage = df_affichage.sort_values(by='Date DPE', ascending=False)
             date_actuelle = datetime.now()
@@ -250,7 +247,7 @@ if st.session_state.analyse_terminee:
         "📊 1. Listing & Repères", 
         "🏖️ 2. Cycle ~5 ans (DPE)", 
         "✉️ 3. Publipostage & Impression",
-        "💶 4. Valeurs Foncières (DVF & Prix m²)"
+        "💶 4. Valeurs Foncières (DVF & Cartographie)"
     ])
     
     with tab1:
@@ -333,55 +330,100 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
                     st.markdown("---")
 
     with tab4:
-        st.subheader("💶 Historique des Ventes & Analyse des Prix au m²")
+        st.subheader("💶 Base de données des Ventes (DVF) & Carte Interactive")
         if not df_dvf.empty:
-            st.write("Base de données des Demandes de Valeurs Foncières (DVF) pour étayer vos avis de valeur avec des transactions réelles.")
-            
-            # --- CRÉATION DE L'ADRESSE COMPLÈTE ---
-            if 'adresse_nom_voie' in df_dvf.columns:
-                num = df_dvf.get('adresse_numero_voie', pd.Series(dtype=str)).fillna('').astype(str).str.replace('.0', '', regex=False)
-                voie = df_dvf['adresse_nom_voie'].fillna('')
-                df_dvf['Adresse Vente'] = (num + " " + voie).str.strip()
-            elif 'adresse' in df_dvf.columns:
-                df_dvf['Adresse Vente'] = df_dvf['adresse']
-            else:
-                df_dvf['Adresse Vente'] = "Adresse non disponible"
+            # --- SUPER DÉTECTEUR D'ADRESSE ---
+            def construire_adresse(row):
+                cols = row.index.tolist()
+                num = ""
+                voie = ""
+                # Cherche le numéro (différents formats possibles)
+                if 'adresse_numero' in cols and pd.notna(row['adresse_numero']):
+                    num = str(row['adresse_numero']).replace('.0', '')
+                elif 'No voie' in cols and pd.notna(row['No voie']):
+                    num = str(row['No voie']).replace('.0', '')
+                # Cherche la rue (différents formats possibles)
+                if 'adresse_nom_voie' in cols and pd.notna(row['adresse_nom_voie']):
+                    voie = str(row['adresse_nom_voie'])
+                elif 'Voie' in cols and pd.notna(row['Voie']):
+                    voie = str(row['Voie'])
+                    if 'Type de voie' in cols and pd.notna(row['Type de voie']):
+                        voie = str(row['Type de voie']) + " " + voie
+                
+                adresse = f"{num} {voie}".strip()
+                return adresse if adresse else "Adresse inconnue (non renseignée dans le fichier)"
+                
+            df_dvf['Adresse Vente'] = df_dvf.apply(construire_adresse, axis=1)
 
-            colonnes_dvf = ['date_mutation', 'Adresse Vente', 'type_local', 'nom_commune', 'valeur_fonciere', 'surface_reelle_bati', 'prix_m2']
+            colonnes_dvf = ['date_mutation', 'Adresse Vente', 'type_local', 'nom_commune', 'valeur_fonciere', 'surface_reelle_bati', 'prix_m2', 'lat', 'lon']
             colonnes_presentes = [col for col in colonnes_dvf if col in df_dvf.columns]
             
             if colonnes_presentes:
                 df_dvf_propre = df_dvf[colonnes_presentes].copy()
                 
-                if 'valeur_fonciere' in df_dvf_propre.columns:
-                    df_dvf_propre['valeur_fonciere'] = df_dvf_propre['valeur_fonciere'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
-                if 'surface_reelle_bati' in df_dvf_propre.columns:
-                    df_dvf_propre['surface_reelle_bati'] = df_dvf_propre['surface_reelle_bati'].apply(lambda x: f"{x:,.0f} m²" if pd.notnull(x) else "")
-                if 'prix_m2' in df_dvf_propre.columns:
-                    df_dvf_propre['prix_m2'] = df_dvf_propre['prix_m2'].apply(lambda x: f"{x:,.0f} €/m²".replace(',', ' '))
+                # Formatage des chiffres pour affichage propre
+                df_dvf_propre['Prix de Vente'] = df_dvf_propre['valeur_fonciere'].apply(lambda x: f"{x:,.0f} €".replace(',', ' ') if pd.notna(x) else "")
+                df_dvf_propre['Surface'] = df_dvf_propre['surface_reelle_bati'].apply(lambda x: f"{x:,.0f} m²" if pd.notna(x) else "")
+                df_dvf_propre['Prix / m²'] = df_dvf_propre['prix_m2'].apply(lambda x: f"{x:,.0f} €/m²".replace(',', ' ') if pd.notna(x) else "")
                 
-                df_dvf_propre = df_dvf_propre.rename(columns={
+                # --- CARTE INTERACTIVE (PYDECK) ---
+                st.markdown("### 📍 Cartographie des transactions (Passez la souris sur les points)")
+                if 'lat' in df_dvf_propre.columns and 'lon' in df_dvf_propre.columns:
+                    df_map = df_dvf_propre.dropna(subset=['lat', 'lon']).copy()
+                    
+                    if not df_map.empty:
+                        # Centrage automatique de la carte sur Nice
+                        view_state = pdk.ViewState(
+                            latitude=df_map['lat'].mean(),
+                            longitude=df_map['lon'].mean(),
+                            zoom=13,
+                            pitch=0
+                        )
+                        
+                        # Création des points cliquables (scatter)
+                        layer = pdk.Layer(
+                            'ScatterplotLayer',
+                            data=df_map,
+                            get_position='[lon, lat]',
+                            get_radius=20,
+                            get_fill_color='[200, 30, 0, 160]',
+                            pickable=True,
+                            auto_highlight=True
+                        )
+                        
+                        # Conception de l'étiquette (Tooltip)
+                        tooltip = {
+                            "html": "<b>{Adresse Vente}</b><br/>"
+                                    "Date : {date_mutation}<br/>"
+                                    "Prix : {Prix de Vente}<br/>"
+                                    "Surface : {Surface}<br/>"
+                                    "<b>Ratio : {Prix / m²}</b>",
+                            "style": {
+                                "backgroundColor": "steelblue",
+                                "color": "white",
+                                "font-family": "sans-serif"
+                            }
+                        }
+                        
+                        st.pydeck_chart(pdk.Deck(
+                            layers=[layer],
+                            initial_view_state=view_state,
+                            tooltip=tooltip
+                        ))
+                    else:
+                        st.info("Aucune coordonnée GPS trouvée pour afficher la carte.")
+
+                st.markdown("---")
+                
+                # --- TABLEAU DÉTAILLÉ ---
+                st.markdown("### 📋 Tableau de bord DVF")
+                df_tableau = df_dvf_propre[['date_mutation', 'Adresse Vente', 'type_local', 'nom_commune', 'Prix de Vente', 'Surface', 'Prix / m²']].rename(columns={
                     'date_mutation': 'Date Acte',
                     'Adresse Vente': 'Adresse',
                     'type_local': 'Type de Bien',
-                    'nom_commune': 'Commune',
-                    'valeur_fonciere': 'Prix de Vente',
-                    'surface_reelle_bati': 'Surface',
-                    'prix_m2': 'Prix / m²'
+                    'nom_commune': 'Commune'
                 })
                 
-                st.dataframe(df_dvf_propre.head(200), use_container_width=True, hide_index=True)
-            
-            st.markdown("---")
-            st.write("📍 **Cartographie des transactions :**")
-            if 'lat' in df_dvf.columns and 'lon' in df_dvf.columns:
-                st.map(df_dvf[['lat', 'lon']].dropna())
+                st.dataframe(df_tableau.head(200), use_container_width=True, hide_index=True)
         else:
-            dossiers = [d for d in os.listdir('.') if os.path.isdir(d) and not d.startswith('.')]
-            dossier_dvf = next((d for d in dossiers if 'dvf' in d.lower()), "Aucun dossier trouvé")
-            fichiers_trouves = os.listdir(dossier_dvf) if dossier_dvf != "Aucun dossier trouvé" else []
-            
-            st.warning("⚠️ **Les données n'ont pas pu s'afficher. Voici le diagnostic du serveur :**")
-            st.write(f"- Dossier lié aux DVF trouvé sur votre GitHub : **`{dossier_dvf}`**")
-            st.write(f"- Fichiers trouvés à l'intérieur : `{fichiers_trouves if fichiers_trouves else 'Dossier vide'}`")
-            st.info("💡 **Conseil :** Vérifiez sur GitHub que vous avez bien mis vos fichiers DVF dans ce dossier, qu'ils se terminent bien par `.csv` ou `.txt`, et qu'ils ne sont pas endommagés.")
+            st.warning("⚠️ Les données DVF n'ont pas pu être chargées. Vérifiez le nom du dossier et vos fichiers.")
