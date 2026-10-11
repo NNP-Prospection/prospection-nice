@@ -70,11 +70,26 @@ def enrichir_avec_sirene(adresse_str):
 
 # --- CHARGEMENT DPE & DVF (AVEC OPTIMISATION MÉMOIRE) ---
 @st.cache_data
+# --- CHARGEMENT DPE & DVF (AVEC OPTIMISATION MÉMOIRE) ---
+
+
+@st.cache_data
 def load_dpe():
-    try:
-        return pd.read_csv('dpe_nice_fg.csv', low_memory=False)
-    except:
-        return pd.DataFrame()
+  try:
+    import glob
+
+    # Recherche et fusion automatique de tous les morceaux (A-G)
+    fichiers = sorted(glob.glob('dpe_nice_part_*.csv'))
+    if fichiers:
+      df_total = pd.concat(
+          [pd.read_csv(f, low_memory=False) for f in fichiers], ignore_index=True
+      )
+      return df_total
+    # Fallback si les morceaux ne sont pas trouvés
+    return pd.read_csv('dpe_nice_complet.csv', low_memory=False)
+  except Exception as e:
+    st.sidebar.error(f'Erreur chargement DPE : {e}')
+    return pd.DataFrame()
 
 @st.cache_data
 def load_dvf():
