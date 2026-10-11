@@ -59,7 +59,7 @@ def enrichir_avec_sirene(adresse_str):
         pass
     return None
 
-# --- CHARGEMENT DVF OPTIMISÉ POUR LA VEFA ---
+# --- CHARGEMENT DVF SOUPLE (BASÉ SUR LE VOLUME DE VENTES GROUPÉES) ---
 @st.cache_data
 def load_dvf_vefa():
     try:
@@ -77,22 +77,12 @@ def load_dvf_vefa():
             return pd.DataFrame() 
             
         liste_df = []
-        colonnes_utiles = ['date_mutation', 'nature_mutation', 'valeur_fonciere', 'adresse_numero', 'No voie', 'adresse_nom_voie', 'Voie', 'Type de voie', 'nom_commune', 'type_local', 'surface_reelle_bati', 'latitude', 'lat', 'longitude', 'lon']
-        
         for f in fichiers:
             try:
-                sample = pd.read_csv(f, sep=';', nrows=0)
-                if len(sample.columns) < 3:
-                     sample = pd.read_csv(f, sep=',', nrows=0)
-                     sep = ','
-                else:
-                     sep = ';'
-                     
-                cols_a_charger = [c for c in colonnes_utiles if c in sample.columns]
-                
-                if cols_a_charger:
-                    df_temp = pd.read_csv(f, sep=sep, usecols=cols_a_charger, low_memory=False)
-                    liste_df.append(df_temp)
+                df_temp = pd.read_csv(f, sep=';', low_memory=False)
+                if len(df_temp.columns) < 3:
+                    df_temp = pd.read_csv(f, sep=',', low_memory=False)
+                liste_df.append(df_temp)
             except:
                 pass
                 
@@ -104,11 +94,6 @@ def load_dvf_vefa():
         if 'latitude' in df.columns:
             df = df.rename(columns={'latitude': 'lat', 'longitude': 'lon'})
             
-        # Filtre STRICT sur la VEFA (Vente en l'État Futur d'Achèvement)
-        if 'nature_mutation' in df.columns:
-            mask_vefa = df['nature_mutation'].astype(str).str.lower().str.contains("vefa|futur|achèvement", na=False)
-            df = df[mask_vefa]
-            
         if 'valeur_fonciere' in df.columns and 'surface_reelle_bati' in df.columns and 'lat' in df.columns:
             df = df.dropna(subset=['valeur_fonciere', 'surface_reelle_bati', 'lat', 'lon']).copy()
             df['valeur_fonciere'] = pd.to_numeric(df['valeur_fonciere'].astype(str).str.replace(',', '.'), errors='coerce')
@@ -117,7 +102,7 @@ def load_dvf_vefa():
             df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
             df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
             
-        # --- SUPER DÉTECTEUR D'ADRESSE ---
+        # --- DÉTECTEUR D'ADRESSE ---
         def construire_adresse(row):
             cols = row.index.tolist()
             num = ""
@@ -137,10 +122,9 @@ def load_dvf_vefa():
             return adresse if adresse else "Adresse inconnue"
             
         df['Adresse Vente'] = df.apply(construire_adresse, axis=1)
-            
         return df
     except Exception as e:
-        st.sidebar.error(f"Erreur chargement DVF VEFA : {e}")
+        st.sidebar.error(f"Erreur chargement DVF : {e}")
         return pd.DataFrame()
 
 df_vefa_brut = load_dvf_vefa()
@@ -171,7 +155,7 @@ if st.sidebar.button("Détecter les programmes (Lots de ventes groupées)", type
                 pattern = '|'.join(mots_cles)
                 df_travail = df_travail[df_travail['Adresse Vente'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Aggrégation pour détecter les programmes neufs (plusieurs ventes à la même adresse)
+        # Agrégation intelligente par adresse pour repérer les volumes groupés (programmes neufs)
         df_groupes = df_travail.groupby('Adresse Vente').agg(
             Nombre_Transactions=('Adresse Vente', 'count'),
             Date_Premiere_Vente=('date_mutation', 'min'),
@@ -182,7 +166,7 @@ if st.sidebar.button("Détecter les programmes (Lots de ventes groupées)", type
             Lon=('lon', 'first')
         ).reset_index()
         
-        # On ne garde que les adresses avec au moins 3 transactions (signe d'un programme VEFA)
+        # On garde les adresses avec au moins 3 transactions groupées
         df_programmes = df_groupes[df_groupes['Nombre_Transactions'] >= 3].sort_values(by='Nombre_Transactions', ascending=False)
         
         st.session_state.df_vefa = df_programmes
@@ -237,8 +221,8 @@ if st.session_state.analyse_vefa_terminee:
             
             tooltip = {
                 "html": "<b>Résidence / Programme :</b><br/>{Adresse Vente}<br/>"
-                        "<b>Volume :</b> {Nombre_Transactions} transactions VEFA<br/>"
-                        "<b>Livraison env. :</b> {Date_Premiere_Vente}<br/>"
+                        "<b>Volume :</b> {Nombre_Transactions} transactions<br/>"
+                        "<b>Première vente :</b> {Date_Premiere_Vente}<br/>"
                         "<b>Fin Pinel (9 ans) :</b> Imminente",
                 "style": {
                     "backgroundColor": "darkgreen",
@@ -261,7 +245,6 @@ if st.session_state.analyse_vefa_terminee:
             index_choisi = lignes_sel[0]
             programme = st.session_state.df_vefa.iloc[index_choisi]
             adresse_programme = programme['Adresse Vente']
-            date_livraison = programme['Date_Premiere_Vente']
             date_jour = datetime.now().strftime("%d/%m/%Y")
             
             st.markdown(f"### 📍 Programme ciblé : {adresse_programme}")
