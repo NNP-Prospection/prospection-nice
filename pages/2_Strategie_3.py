@@ -59,7 +59,7 @@ def enrichir_avec_sirene(adresse_str):
         pass
     return None
 
-# --- CHARGEMENT DVF SOUPLE (BASÉ SUR LE VOLUME DE VENTES GROUPÉES) ---
+# --- CHARGEMENT DVF SOUPLE ---
 @st.cache_data
 def load_dvf_vefa():
     try:
@@ -102,7 +102,6 @@ def load_dvf_vefa():
             df['prix_m2'] = df['valeur_fonciere'] / df['surface_reelle_bati']
             df = df[(df['prix_m2'] > 1000) & (df['prix_m2'] < 25000)]
             
-        # --- DÉTECTEUR D'ADRESSE ---
         def construire_adresse(row):
             cols = row.index.tolist()
             num = ""
@@ -142,7 +141,6 @@ if st.sidebar.button("Détecter les programmes (Lots de ventes groupées)", type
     if not df_vefa_brut.empty:
         df_travail = df_vefa_brut.copy()
         
-        # Filtre par secteur
         if secteur != "Tous les secteurs":
             rues_quartiers = {
                 "Musiciens (Verdi / Berlioz)": ["verdi", "berlioz"],
@@ -155,7 +153,6 @@ if st.sidebar.button("Détecter les programmes (Lots de ventes groupées)", type
                 pattern = '|'.join(mots_cles)
                 df_travail = df_travail[df_travail['Adresse Vente'].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
 
-        # Agrégation intelligente par adresse pour repérer les volumes groupés (programmes neufs)
         df_groupes = df_travail.groupby('Adresse Vente').agg(
             Nombre_Transactions=('Adresse Vente', 'count'),
             Date_Premiere_Vente=('date_mutation', 'min'),
@@ -166,7 +163,6 @@ if st.sidebar.button("Détecter les programmes (Lots de ventes groupées)", type
             Lon=('lon', 'first')
         ).reset_index()
         
-        # On garde les adresses avec au moins 3 transactions groupées
         df_programmes = df_groupes[df_groupes['Nombre_Transactions'] >= 3].sort_values(by='Nombre_Transactions', ascending=False)
         
         st.session_state.df_vefa = df_programmes
@@ -281,16 +277,5 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
             logo_path = "Cabinet Immobilier Privé HONORAT.png"
             if os.path.exists(logo_path): 
                 st.image(logo_path, width=200)
-                
-            # --- ACCÈS RAPIDE AUX OUTILS OFFICIELS ---
-            st.markdown("---")
-            st.markdown("### 🔗 Accès rapides aux outils d'investigation foncière :")
-            st.markdown(
-                """
-                * 🗺️ [Consulter le plan cadastral officiel (cadastre.gouv.fr)](https://www.cadastre.gouv.fr)
-                * 🛰️ [Explorer la vue aérienne et les parcelles (geoportail.gouv.fr)](https://www.geoportail.gouv.fr)
-                * 💶 [Vérifier l'historique des transactions foncières (app.dvf.etalab.gouv.fr)](https://app.dvf.etalab.gouv.fr)
-                """
-            )
         else:
             st.warning("👈 Veuillez sélectionner une ligne dans le tableau du Tab 1 pour afficher le courrier correspondant.")
