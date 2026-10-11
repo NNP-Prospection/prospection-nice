@@ -18,23 +18,20 @@ st.markdown("Ciblage des fins de cycles fiscaux et alertes en direct sur les év
 @st.cache_data
 def load_dpe():
     try:
-        # Optimisation : On ne charge que la colonne d'adresse pour alléger la RAM (puisqu'on n'a besoin que de ça pour le publipostage ici)
-        return pd.read_csv('dpe_nice_fg.csv', usecols=lambda c: c in ['adresse_ban', 'adresse_brute', 'adresse_propriete'], low_memory=False)
+        return pd.read_csv('dpe_nice_fg.csv', low_memory=False)
     except:
         return pd.DataFrame()
 
 df_dpe = load_dpe()
 
 # --- MOTEUR DE VEILLE JURIDIQUE EN TEMPS RÉEL ---
-@st.cache_data(ttl=3600) # L'outil se met à jour tout seul toutes les heures
+@st.cache_data(ttl=3600)
 def fetch_veille_juridique():
     flux_officiels = [
         "https://www.service-public.fr/professionnels-entreprises/actualites/rss",
         "https://www.service-public.fr/particuliers/actualites/rss"
     ]
     articles_trouves = []
-    
-    # Ajout vital d'un User-Agent pour éviter que le serveur de l'État ne bloque la requête Python
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     
     for url in flux_officiels:
@@ -46,7 +43,6 @@ def fetch_veille_juridique():
                     titre = item.find('title').text if item.find('title') is not None else ""
                     lien = item.find('link').text if item.find('link') is not None else ""
                     
-                    # Le radar à "Lanterne Rouge" (ajout de "plus-value")
                     mots_cles_immo = ['loi', 'immobilier', 'logement', 'dpe', 'fiscal', 'impôt', 'bail', 'lmnp', 'pinel', 'copropriété', 'énergie', 'taxe', 'finance', 'plus-value']
                     is_alerte = any(mot in titre.lower() for mot in mots_cles_immo)
                     
@@ -55,7 +51,6 @@ def fetch_veille_juridique():
         except:
             pass
             
-    # On enlève les doublons potentiels et on garde les plus récents
     articles_uniques = []
     liens_vus = set()
     for art in articles_trouves:
@@ -63,9 +58,17 @@ def fetch_veille_juridique():
             articles_uniques.append(art)
             liens_vus.add(art['lien'])
             
-    return articles_uniques[:8] # Affiche les 8 alertes les plus chaudes
+    return articles_uniques[:8]
 
 alertes_en_direct = fetch_veille_juridique()
+
+# --- BARRE LATÉRALE : CRITÈRES DE CIBLAGE ---
+st.sidebar.header("🎯 Critères de ciblage Investisseurs")
+
+secteur = st.sidebar.selectbox(
+    "Quartier / Secteur",
+    ["Tous les secteurs", "Carré d'Or", "Promenade des Anglais", "Port / Garibaldi", "Mont Boron", "Musiciens / Gambetta", "Centre-ville"]
+)
 
 # --- AFFICHAGE DES ONGLETS ---
 tab1, tab2 = st.tabs(["✉️ 1. Publipostage Investisseurs", "🚨 2. Veille Juridique en Temps Réel"])
@@ -78,18 +81,33 @@ with tab1:
         col_adresse = next((col for col in ['adresse_ban', 'adresse_brute', 'adresse_propriete'] if col in df_dpe.columns), None)
         
         if col_adresse:
-            adresses_dispos = df_dpe[col_adresse].dropna().unique().tolist()
-            # Tri alphabétique pour faciliter la recherche de l'utilisateur dans le menu déroulant
+            df_travail = df_dpe.copy()
+            
+            # --- FILTRE PAR SECTEUR RETABLI ---
+            if secteur != "Tous les secteurs":
+                rues_quartiers = {
+                    "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer", "congres", "cronstadt"],
+                    "Promenade des Anglais": ["promenade des anglais", "etats-unis", "quai des etats-unis"],
+                    "Port / Garibaldi": ["garibaldi", "lunel", "cassini", "barla", "arson", "republique", "port"],
+                    "Mont Boron": ["mont boron", "jean lorrain", "carnot", "germaine", "andre joly", "valrose", "cap de nice"],
+                    "Musiciens / Gambetta": ["gambetta", "berlioz", "gounod", "rossini", "verdi", "clemenceau", "victor hugo"],
+                    "Centre-ville": ["jean medecin", "gioffredo", "marechal foch", "pastorelli", "assalit", "durandy"]
+                }
+                mots_cles = rues_quartiers.get(secteur, [])
+                if mots_cles:
+                    pattern = '|'.join(mots_cles)
+                    df_travail = df_travail[df_travail[col_adresse].astype(str).str.lower().str.contains(pattern, na=False, regex=True)]
+
+            adresses_dispos = df_travail[col_adresse].dropna().unique().tolist()
             adresses_dispos.sort()
             
-            adresse_choisie = st.selectbox("📍 Choisir une adresse pour générer le courrier :", adresses_dispos)
-            
-            date_jour = datetime.now().strftime("%d/%m/%Y")
-            
-            # Application du .title() pour que "12 RUE ALBERTI" devienne "12 Rue Alberti" dans le courrier
-            adresse_propre = adresse_choisie.title() if adresse_choisie else ""
-            
-            courrier_investisseur = f"""Nice, le {date_jour}
+            if adresses_dispos:
+                adresse_choisie = st.selectbox(f"📍 Choisir une adresse ({secteur}) :", adresses_dispos)
+                
+                date_jour = datetime.now().strftime("%d/%m/%Y")
+                adresse_propre = adresse_choisie.title() if adresse_choisie else ""
+                
+                courrier_investisseur = f"""Nice, le {date_jour}
 
 Destinataire : Propriétaire / Investisseur Bailleur
 Concerne l'actif situé au : {adresse_propre}
@@ -116,10 +134,12 @@ Conseil en Immobilier Patrimonial
 CABINET PRIVÉ IMMOBILIER HONORAT
 TRANSACTION . CONSEIL . PATRIMOINE"""
 
-            st.text_area(f"📄 Modèle de courrier (Actualisé Loi Finance)", courrier_investisseur, height=400)
-            logo_path = "Cabinet Immobilier Privé HONORAT.png"
-            if os.path.exists(logo_path): 
-                st.image(logo_path, width=200)
+                st.text_area(f"📄 Modèle de courrier (Actualisé Loi Finance)", courrier_investisseur, height=400)
+                logo_path = "Cabinet Immobilier Privé HONORAT.png"
+                if os.path.exists(logo_path): 
+                    st.image(logo_path, width=200)
+            else:
+                st.warning(f"⚠️ Aucune adresse trouvée pour le secteur : **{secteur}**.")
 
 with tab2:
     st.subheader("📡 Flux d'Actualités Officielles (Mis à jour automatiquement)")
