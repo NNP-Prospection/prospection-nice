@@ -11,6 +11,73 @@ st.set_page_config(
     page_title='Stratégie 1 - Cabinet Honorat', page_icon='🏢', layout='wide'
 )
 
+import xml.etree.ElementTree as ET
+import requests
+import streamlit as st
+
+
+# --- MODULE DE VEILLE AUTOMATIQUE & BANDEAU D'ALERTE LMP / FISCALITÉ ---
+@st.cache_data(
+    ttl=1800
+)  # Actualisation automatique toutes les 30 minutes auprès des flux officiels
+def verifier_alerte_lmp_urgente():
+  flux_officiels = [
+      "https://www.service-public.fr/professionnels-entreprises/actualites/rss",
+      "https://www.service-public.fr/particuliers/actualites/rss",
+  ]
+  # Mots-clés cibles pour déclencher l'alerte sur le LMP, LMNP et la fiscalité
+  mots_cles_urgents = [
+      "lmp",
+      "lmnp",
+      "amortissement",
+      "fiscal",
+      "plf",
+      "loi de finances",
+      "plus-value",
+      "bic",
+  ]
+  alertes_critiques = []
+  headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+  for url in flux_officiels:
+    try:
+      reponse = requests.get(url, headers=headers, timeout=3)
+      if reponse.status_code == 200:
+        root = ET.fromstring(reponse.content)
+        for item in root.findall(".//item"):
+          titre = (
+              item.find("title").text if item.find("title") is not None else ""
+          )
+          lien = (
+              item.find("link").text if item.find("link") is not None else ""
+          )
+          titre_lower = titre.lower()
+          if any(mot in titre_lower for mot in mots_cles_urgents):
+            alertes_critiques.append({"titre": titre, "lien": lien})
+    except:
+      pass
+  return alertes_critiques[
+      :3
+  ]  # Retourne les 3 alertes les plus chaudes détectées
+
+
+# --- AFFICHAGE DU BANDEAU D'ALERTE SUR LA PAGE ---
+urgences_veille = verifier_alerte_lmp_urgente()
+if urgences_veille:
+  st.error(
+      "🚨 **ALERTE ROUGE - VEILLE JURIDIQUE & FISCALE LMP / LMNP / AMORTISSEMENT**"
+      " 🚨"
+  )
+  st.write(
+      "Un changement ou une actualité législative majeure vient d'être"
+      " interceptée sur les flux officiels de l'État :"
+  )
+  for alerte in urgences_veille:
+    st.markdown(
+        f"- **[{alerte['titre']}]({alerte['lien']})** *(Vérifiez l'impact sur"
+        " vos portefeuilles investisseurs)*"
+    )
+  st.markdown("---")
 st.title('🏢 Stratégie 1 : Passoires F/G & Cycle de Détention (5 ans)')
 st.markdown(
     "Approche par l'actif : Identification des urgences énergétiques (DPE),"
