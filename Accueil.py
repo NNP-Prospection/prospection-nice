@@ -530,6 +530,8 @@ if st.session_state.analyse_terminee:
           lot = formater_numero(ligne_bien.get('N° Lot', ''))
           etage = formater_numero(ligne_bien.get('Étage', ''))
           bat = formater_numero(ligne_bien.get('Bâtiment', ''))
+          note_dpe = str(ligne_bien.get('Note DPE', '')).strip().upper()
+          profil_bien = str(ligne_bien.get('Profil & Stratégie', ''))
 
           infos_repere = []
           if bat:
@@ -544,14 +546,13 @@ if st.session_state.analyse_terminee:
               ' | '.join(infos_repere) if infos_repere else 'Bien identifié'
           )
 
-          paragraphe_strategique = (
-              "Au regard des récentes évolutions de la législation"
-              " énergétique (calendrier d'interdiction de mise en location des"
-              ' passoires thermiques F et G) et de la fiscalité (régime LMNP,'
-              " optimisation de la valeur vénale), l'anticipation de la gestion"
-              ' de votre patrimoine est devenue un enjeu majeur pour sécuriser'
-              ' votre rentabilité nette et éviter toute décote de votre bien.'
-          )
+          # --- ADAPTATION INTELLIGENTE DU COURRIER SELON LE PROFIL ---
+          if 'Passoire F/G' in profil_bien or note_dpe in ['F', 'G']:
+            objet_courrier = f"Anticipation réglementaire, valorisation et optimisation de votre actif immobilier au {adresse.title()} ({str_reperage})"
+            paragraphe_strategique = "Au regard des récentes évolutions de la législation énergétique (calendrier d'interdiction de mise en location des passoires thermiques F et G) et de la fiscalité, l'anticipation de la gestion de votre patrimoine est devenue un enjeu majeur pour sécuriser votre rentabilité nette et éviter toute décote de votre bien."
+          else:
+            objet_courrier = f"Optimisation patrimoniale et opportunité d'arbitrage pour votre actif immobilier au {adresse.title()} ({str_reperage})"
+            paragraphe_strategique = "Dans le cadre d'une gestion dynamique de votre patrimoine immobilier et au regard des conditions de marché actuelles sur les secteurs recherchés de Nice (notamment après un cycle de détention d'environ 5 ans), l'étude d'un arbitrage ou d'une valorisation optimale de votre actif représente une opportunité stratégique pour sécuriser vos plus-values et réallouer vos capitaux dans de meilleures conditions."
 
           destinataire_affichage = (
               'Destinataire : Propriétaire / Copropriétaire\nLocalisation du'
@@ -568,7 +569,7 @@ Adresse du bien : {adresse.title()}
 
 {appel_destinataire}
 
-Objet : Anticipation réglementaire, valorisation et optimisation de votre actif immobilier au {adresse.title()} ({str_reperage})
+Objet : {objet_courrier}
 
 En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble. 
 
@@ -716,6 +717,6 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
         )
     else:
       st.warning(
-          '⚠️ Les données DVF n’ont pas pu être chargées. Vérifiez le nom du'
+          '⚠️ Les données DVF n’ont pas t’pu être chargées. Vérifiez le nom du'
           ' dossier et vos fichiers.'
       )
