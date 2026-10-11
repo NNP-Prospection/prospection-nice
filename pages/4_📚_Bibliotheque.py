@@ -1,69 +1,75 @@
+from datetime import datetime
+import pandas as pd
 import streamlit as st
 
+# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Bibliothèque - Cabinet Honorat",
+    page_title="Bibliothèque & Outils Professionnels - Cabinet Honorat",
     page_icon="📚",
-    layout="wide"
+    layout="wide",
 )
 
-st.title("📚 Bibliothèque & Outils Professionnels")
-st.markdown("Accès direct aux plateformes officielles d'investigation foncière, juridique et institutionnelle.")
+st.title("📚 Bibliothèque & Outils Professionnels - Cabinet Honorat")
+st.markdown(
+    "Accès direct aux plateformes officielles d'investigation foncière,"
+    " juridique et aux simulateurs experts du Cabinet."
+)
 
-st.markdown("---")
+# --- NAVIGATION INTERNE VIA LA BARRE LATÉRALE ---
+module_choisi = st.sidebar.selectbox(
+    "Choisir un module",
+    [
+        "🗺️ Liens & Ressources Officielles",
+        "📊 Module Expert : Plus-Value & Arbitrage",
+        "🏛️ Simulateur Dispositif Jeanbrun (Bailleur Privé)",
+        "⚖️ Guide & Arsenal Fiscal (Pinel, Denormandie, Malraux, LMNP/LMP)",
+    ],
+)
 
-col1, col2 = st.columns(2)
+if module_choisi == "🗺️ Liens & Ressources Officielles":
+  st.markdown("---")
 
-with col1:
+  col1, col2 = st.columns(2)
+
+  with col1:
     st.subheader("🗺️ Foncier, Cartographie & Cadastre")
-    st.markdown(
-        """
+    st.markdown("""
         * 🌐 [Plan Cadastral Officiel](https://www.cadastre.gouv.fr) : Consultation des plans parcellaires.
         * 🛰️ [Géoportail National](https://www.geoportail.gouv.fr) : Vues aériennes, topographie et données géographiques.
         * 💶 [Demandes de Valeurs Foncières (DVF)](https://app.dvf.etalab.gouv.fr) : Historique officiel des transactions immobilières en France.
         * 🏙️ [Géoportail de l'Urbanisme (GPU)](https://www.geoportail-urbanisme.gouv.fr) : PLU, règlements d'urbanisme et zonages de Nice.
-        """
-    )
-    
+        """)
+
     st.subheader("🏢 Entreprises, SCI & R.C.S.")
-    st.markdown(
-        """
+    st.markdown("""
         * 🔍 [Annuaire des Entreprises (API Gouv)](https://annuaire-entreprises.data.gouv.fr) : Recherche rapide de SCI, SIREN et dirigeants.
         * ⚖️ [BODACC](https://www.bodacc.fr) : Bulletins officiels des annonces civiles et commerciales (contrôle des liquidations/cessations).
         * 🏛️ [Infogreffe / Pappers](https://www.pappers.fr) : Analyse financière et juridique des sociétés civiles immobilières.
-        """
-    )
+        """)
 
-with col2:
+  with col2:
     st.subheader("📜 Veille Juridique & Textes Officiels")
-    st.markdown(
-        """
+    st.markdown("""
         * 🇫🇷 [Service-Public Pro](https://www.service-public.fr/professionnels-entreprises) : Actualités et démarches administratives.
         * 🏛️ [Légifrance](https://www.legifrance.gouv.fr) : Le service public de la diffusion du droit (lois, décrets, codes).
         * 💶 [Impots.gouv.fr (Espace Pro)](https://www.impots.gouv.fr) : Fiscalité foncière, déclarations et régimes LMNP/LMP.
-        """
-    )
-    
+        """)
+
     st.subheader("🤝 Partenaires & Professionnels")
-    st.markdown(
-        """
+    st.markdown("""
         * 🏠 [FNAIM Côte d'Azur](https://www.fnaim.fr) : Portail de la fédération immobilière.
         * 📊 [Meilleurs Agents Pro](https://www.meilleursagents.com/pro) : Indices de prix et valorisations sectorielles à Nice.
         * 🏦 [Qonto Pro](https://qonto.com/fr) : Gestion de la trésorerie et facturation du cabinet.
-        """
-    )
+        """)
 
-st.markdown("---")
-st.info("💡 **Conseil du Cabinet :** Ces liens s'ouvrent directement dans de nouveaux onglets pour faciliter vos recherches de terrain tout en gardant votre application Streamlit active.")
+  st.markdown("---")
+  st.info(
+      "💡 **Conseil du Cabinet :** Ces liens s'ouvrent directement dans de"
+      " nouveaux onglets pour faciliter vos recherches de terrain tout en"
+      " gardant votre application Streamlit active."
+  )
 
-# =====================================================================
-# CELLULE DÉDIÉE : SIMULATEUR DE PLUS-VALUE IMMOBILIÈRE & ARBITRAGE
-# Cabinet Privé Immobilier Honorat
-# =====================================================================
-
-import streamlit as st
-
-
-def afficher_module_plus_value():
+elif module_choisi == "📊 Module Expert : Plus-Value & Arbitrage":
   st.subheader(
       "📊 Module Expert : Simulateur de Plus-Value Immobilière & Arbitrage"
   )
@@ -224,6 +230,121 @@ def afficher_module_plus_value():
       )
   )
 
+elif module_choisi == "🏛️ Simulateur Dispositif Jeanbrun (Bailleur Privé)":
+  st.header("🏛️ Simulateur du Dispositif Jeanbrun (Statut de Bailleur Privé)")
+  st.markdown(
+      "Estimez l’avantage fiscal et l’amortissement d’un logement loué nu sous"
+      " le régime du bailleur privé (engagement 9 ans avec loyer maîtrisé)."
+  )
 
-# Appel de la fonction pour l'affichage dans la cellule dédiée
-afficher_module_plus_value()
+  col1, col2 = st.columns(2)
+
+  with col1:
+    valeur_bien = st.number_input(
+        "Valeur d'acquisition du bien (€)",
+        min_value=50000,
+        max_value=5000000,
+        value=300000,
+        step=10000,
+    )
+    travaux = st.number_input(
+        "Montant des travaux de rénovation (€)",
+        min_value=0,
+        max_value=500000,
+        value=30000,
+        step=5000,
+    )
+    loyer_mensuel = st.number_input(
+        "Loyer mensuel estimé (€)",
+        min_value=200,
+        max_value=10000,
+        value=1200,
+        step=50,
+    )
+
+  with col2:
+    tranche_tmi = st.selectbox(
+        "Tranche Marginale d’Imposition (TMI)", [11, 30, 41, 45], index=1
+    )
+    duree_engagement = st.selectbox(
+        "Durée d'engagement locatif", ["9 ans (Standard)", "12 ans (Majoré)"]
+    )
+    niveau_loyer = st.selectbox(
+        "Niveau de décote du loyer (par rapport au marché)",
+        ["Intermédiaire (15%)", "Social / Très social (30%+)"],
+    )
+
+  if st.button("Calculer la simulation Jeanbrun", type="primary"):
+    investissement_total = valeur_bien + travaux
+    taux_amortissement = 0.035
+    base_amortissable = (valeur_bien * 0.8) + travaux
+    amortissement_annuel = base_amortissable * taux_amortissement
+    loyer_annuel = loyer_mensuel * 12
+    rentabilite_brute = (loyer_annuel / investissement_total) * 100
+
+    st.markdown("---")
+    st.subheader("📊 Résultats de la Simulation")
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric(
+        "Investissement Global",
+        f"{investissement_total:,.0f} €".replace(",", " "),
+    )
+    m2.metric("Rentabilité Brute", f"{rentabilite_brute:.2f} %")
+    m3.metric(
+        "Amortissement Annuel Déductible",
+        f"{amortissement_annuel:,.0f} €".replace(",", " "),
+    )
+
+    st.info(
+        f"💡 **Analyse du Cabinet Honorat :** Sous le régime du bailleur privé"
+        f" (Dispositif Jeanbrun), pour un investissement de"
+        f" {investissement_total:,.0f} €, l'amortissement annuel de"
+        f" {amortissement_annuel:,.0f} € vient optimiser fiscalement vos"
+        " revenus fonciers sur la durée de l’engagement."
+    )
+
+else:
+  st.header("⚖️ Guide & Arsenal Fiscal des Dispositifs Immobiliers")
+  st.markdown(
+      "Panorama complet et stratégique des dispositifs d'investissement locatif"
+      " et de défiscalisation (Pinel, Denormandie, Malraux, Monuments"
+      " Historiques, LMNP/LMP)."
+  )
+
+  tab_pinel, tab_denormandie, tab_malraux, tab_lmnp = st.tabs([
+      "📌 Pinel (Fin de cycle & Arbitrage)",
+      "🏡 Denormandie (Ancien Rénové)",
+      "🏛️ Malraux & Monuments Historiques",
+      "🛋️ LMNP / LMP & Veille Fiscale",
+  ])
+
+  with tab_pinel:
+    st.subheader("Dispositif Pinel (Extinction & Fins d'Engagement)")
+    st.markdown("""
+        * **Contexte :** Le dispositif Pinel s'achève définitivement. De nombreux investisseurs arrivent au terme de leur engagement (6, 9 ou 12 ans).
+        * **Opportunité pour le Cabinet Honorat :** C'est le moment idéal pour proposer un audit patrimonial aux propriétaires bailleurs dont l'avantage fiscal s'éteint, afin de basculer sur un arbitrage, une revente (plus-value) ou un réinvestissement (ex: Statut de Bailleur Privé / Jeanbrun).
+        """)
+
+  with tab_denormandie:
+    st.subheader("Dispositif Denormandie (Rénovation dans l'Ancien)")
+    st.markdown("""
+        * **Cible :** Logements anciens situés dans les communes labellisées "Cœur de Ville" ou ayant signé une Opération de Revitalisation du Territoire (ORT).
+        * **Avantage :** Réduction d'impôt sur le revenu équivalente au Pinel (jusqu'à 21% sur 12 ans), à condition que les travaux représentent au moins 25% du coût total de l'opération.
+        """)
+
+  with tab_malraux:
+    st.subheader("Loi Malraux & Monuments Historiques (Patrimoine d'Exception)")
+    st.markdown("""
+        * **Loi Malraux :** Restauration d'immeubles bâtis situés dans les Quartiers Antiques Remarquables (QAD) ou Sites Remarquables. Réduction d'impôt de 22% à 30% du montant des travaux, **hors plafonnement global des niches fiscales** (plafond de 400 000 € sur 4 ans).
+        * **Monuments Historiques :** Déduction intégrale des charges foncières et des travaux sur le revenu global sans aucun plafond. Un outil puissant pour les contribuables fortement fiscalisés (TMI 41% - 45%).
+        """)
+
+  with tab_lmnp:
+    st.subheader(
+        "LMNP / LMP (Loueur Meublé Non Professionnel / Professionnel)"
+    )
+    st.markdown("""
+        * **Régime Réel :** Amortissement du bien immobilier, des travaux et du mobilier, permettant d'annuler ou de fortement réduire l'imposition des loyers perçus (BIC).
+        * **Veille Juridique & Fiscale :** En lien direct avec votre module de veille, le cabinet surveille de près les évolutions réglementaires (comme les projets de plafonnement des amortissements dans le cadre des lois de finances) pour conseiller au mieux les investisseurs.
+        """)
