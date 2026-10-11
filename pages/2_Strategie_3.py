@@ -282,6 +282,15 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
             if os.path.exists(logo_path): 
                 st.image(logo_path, width=200)
                 
-            st.info("💡 ÉTAPE TERRAIN : Demandez la matrice cadastrale pour cette adresse afin de récupérer les adresses fiscales réelles de ces propriétaires non occupants (PNO).")
+            # --- ACCÈS RAPIDE AUX OUTILS OFFICIELS ---
+            st.markdown("---")
+            st.markdown("### 🔗 Accès rapides aux outils d'investigation foncière :")
+            st.markdown(
+                """
+                * 🗺️ [Consulter le plan cadastral officiel (cadastre.gouv.fr)](https://www.cadastre.gouv.fr)
+                * 🛰️ [Explorer la vue aérienne et les parcelles (geoportail.gouv.fr)](https://www.geoportail.gouv.fr)
+                * 💶 [Vérifier l'historique des transactions foncières (app.dvf.etalab.gouv.fr)](https://app.dvf.etalab.gouv.fr)
+                """
+            )
         else:
             st.warning("👈 Veuillez sélectionner une ligne dans le tableau du Tab 1 pour afficher le courrier correspondant.")
