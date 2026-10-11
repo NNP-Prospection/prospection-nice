@@ -18,7 +18,8 @@ st.markdown("Ciblage des fins de cycles fiscaux et alertes en direct sur les év
 @st.cache_data
 def load_dpe():
     try:
-        return pd.read_csv('dpe_nice_fg.csv', low_memory=False)
+        # Optimisation : On ne charge que la colonne d'adresse pour alléger la RAM (puisqu'on n'a besoin que de ça pour le publipostage ici)
+        return pd.read_csv('dpe_nice_fg.csv', usecols=lambda c: c in ['adresse_ban', 'adresse_brute', 'adresse_propriete'], low_memory=False)
     except:
         return pd.DataFrame()
 
@@ -33,17 +34,20 @@ def fetch_veille_juridique():
     ]
     articles_trouves = []
     
+    # Ajout vital d'un User-Agent pour éviter que le serveur de l'État ne bloque la requête Python
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    
     for url in flux_officiels:
         try:
-            reponse = requests.get(url, timeout=5)
+            reponse = requests.get(url, headers=headers, timeout=5)
             if reponse.status_code == 200:
                 root = ET.fromstring(reponse.content)
                 for item in root.findall('.//item'):
                     titre = item.find('title').text if item.find('title') is not None else ""
                     lien = item.find('link').text if item.find('link') is not None else ""
                     
-                    # Le radar à "Lanterne Rouge"
-                    mots_cles_immo = ['loi', 'immobilier', 'logement', 'dpe', 'fiscal', 'impôt', 'bail', 'lmnp', 'pinel', 'copropriété', 'énergie', 'taxe', 'finance']
+                    # Le radar à "Lanterne Rouge" (ajout de "plus-value")
+                    mots_cles_immo = ['loi', 'immobilier', 'logement', 'dpe', 'fiscal', 'impôt', 'bail', 'lmnp', 'pinel', 'copropriété', 'énergie', 'taxe', 'finance', 'plus-value']
                     is_alerte = any(mot in titre.lower() for mot in mots_cles_immo)
                     
                     if is_alerte:
@@ -75,18 +79,24 @@ with tab1:
         
         if col_adresse:
             adresses_dispos = df_dpe[col_adresse].dropna().unique().tolist()
+            # Tri alphabétique pour faciliter la recherche de l'utilisateur dans le menu déroulant
+            adresses_dispos.sort()
+            
             adresse_choisie = st.selectbox("📍 Choisir une adresse pour générer le courrier :", adresses_dispos)
             
             date_jour = datetime.now().strftime("%d/%m/%Y")
             
+            # Application du .title() pour que "12 RUE ALBERTI" devienne "12 Rue Alberti" dans le courrier
+            adresse_propre = adresse_choisie.title() if adresse_choisie else ""
+            
             courrier_investisseur = f"""Nice, le {date_jour}
 
 Destinataire : Propriétaire / Investisseur Bailleur
-Concerne l'actif situé au : {adresse_choisie}
+Concerne l'actif situé au : {adresse_propre}
 
 Madame, Monsieur,
 
-Objet : Alerte fiscale PLF 2027 et stratégie d'arbitrage de votre actif au {adresse_choisie}
+Objet : Alerte fiscale PLF 2027 et stratégie d'arbitrage de votre actif au {adresse_propre}
 
 En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter de manière confidentielle au sujet du bien que vous proposez à la location.
 
