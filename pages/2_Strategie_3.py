@@ -198,4 +198,107 @@ if st.session_state.analyse_vefa_terminee:
     ])
     
     with tab1:
-        st.success(f"✅ Radar activé ! **{len(st.session_state
+        st.success(f"✅ Radar activé ! **{len(st.session_state.df_vefa)}** programmes neufs potentiels (Pinel) détectés.")
+        
+        df_affichage = st.session_state.df_vefa.copy()
+        df_affichage['Prix_Moyen'] = df_affichage['Prix_Moyen'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+        df_affichage['Surface_Moyenne'] = df_affichage['Surface_Moyenne'].apply(lambda x: f"{x:,.0f} m²")
+        
+        event_selection = st.dataframe(
+            df_affichage[['Adresse Vente', 'Nombre_Transactions', 'Date_Premiere_Vente', 'Prix_Moyen', 'Surface_Moyenne']], 
+            use_container_width=True, 
+            on_select="rerun", 
+            selection_mode="single-row", 
+            hide_index=True
+        )
+        
+        st.download_button("📥 Exporter pour demande de Matrice Cadastrale (CSV)", data=df_affichage.to_csv(index=False).encode('utf-8'), file_name="radar_vefa_matrices.csv", mime='text/csv')
+
+    with tab2:
+        st.subheader("📍 Cartographie des Résidences Neuves (2015-2017)")
+        if not st.session_state.df_vefa.empty and 'Lat' in st.session_state.df_vefa.columns:
+            
+            view_state = pdk.ViewState(
+                latitude=st.session_state.df_vefa['Lat'].mean(),
+                longitude=st.session_state.df_vefa['Lon'].mean(),
+                zoom=14,
+                pitch=45
+            )
+            
+            layer = pdk.Layer(
+                'ScatterplotLayer',
+                data=st.session_state.df_vefa,
+                get_position='[Lon, Lat]',
+                get_radius='Nombre_Transactions * 3', 
+                get_fill_color='[46, 204, 113, 200]',
+                pickable=True,
+                auto_highlight=True
+            )
+            
+            tooltip = {
+                "html": "<b>Résidence / Programme :</b><br/>{Adresse Vente}<br/>"
+                        "<b>Volume :</b> {Nombre_Transactions} transactions VEFA<br/>"
+                        "<b>Livraison env. :</b> {Date_Premiere_Vente}<br/>"
+                        "<b>Fin Pinel (9 ans) :</b> Imminente",
+                "style": {
+                    "backgroundColor": "darkgreen",
+                    "color": "white",
+                    "font-family": "sans-serif"
+                }
+            }
+            
+            st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip=tooltip))
+        else:
+            st.info("Aucune donnée cartographique disponible pour ces programmes.")
+
+    with tab3:
+        st.subheader("✉️ Préparation Publipostage (Propriétaires Non Occupants - PNO)")
+        st.write("Sélectionnez un programme dans le Tab 1 pour générer le courrier type destiné aux investisseurs dont l'engagement de 9 ans s'achève.")
+        
+        lignes_sel = event_selection['selection'].get('rows', []) if event_selection and 'selection' in event_selection else []
+        
+        if lignes_sel:
+            index_choisi = lignes_sel[0]
+            programme = st.session_state.df_vefa.iloc[index_choisi]
+            adresse_programme = programme['Adresse Vente']
+            date_livraison = programme['Date_Premiere_Vente']
+            date_jour = datetime.now().strftime("%d/%m/%Y")
+            
+            st.markdown(f"### 📍 Programme ciblé : {adresse_programme}")
+            
+            courrier_vefa = f"""Nice, le {date_jour}
+
+Destinataire : Investisseur Bailleur
+Concerne la résidence sise au : {adresse_programme}
+
+Madame, Monsieur,
+
+Objet : Échéance fiscale (9 ans) et bilan patrimonial de votre bien acquis en VEFA au {adresse_programme}
+
+En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter concernant l'appartement neuf dont vous avez fait l'acquisition dans cette résidence il y a maintenant près de 9 ans.
+
+Si vous aviez opté pour le dispositif Pinel lors de votre investissement, votre engagement de location sous plafond de ressources et de loyers arrive (ou est arrivé) à son terme légal.
+
+Cette échéance fiscale représente un carrefour stratégique pour la valorisation du patrimoine. Sans l'avantage fiscal initial, le rendement locatif brut de votre bien peut s'avérer décevant au regard de la valeur vénale actuelle de votre appartement sur le marché niçois.
+
+Avant toute reconduction tacite de bail ou prise de décision hâtive, je vous propose de réaliser un audit gratuit et confidentiel de la valeur de revente de votre bien. Nous pourrons ainsi étudier ensemble s'il est plus pertinent de conserver, de restructurer (LMNP) ou de procéder à un arbitrage patrimonial pour sécuriser votre plus-value.
+
+Je me tiens à votre entière disposition pour un échange téléphonique.
+
+Bien cordialement,
+
+Nathalie Parra
+Conseil en Immobilier Patrimonial
+
+CABINET PRIVÉ IMMOBILIER HONORAT
+TRANSACTION . CONSEIL . PATRIMOINE"""
+
+            st.text_area("📄 Courrier de sortie de défiscalisation (Pinel 9 ans)", courrier_vefa, height=350)
+            
+            logo_path = "Cabinet Immobilier Privé HONORAT.png"
+            if os.path.exists(logo_path): 
+                st.image(logo_path, width=200)
+                
+            st.info("💡 ÉTAPE TERRAIN : Demandez la matrice cadastrale pour cette adresse afin de récupérer les adresses fiscales réelles de ces propriétaires non occupants (PNO).")
+        else:
+            st.warning("👈 Veuillez sélectionner une ligne dans le tableau du Tab 1 pour afficher le courrier correspondant.")
