@@ -8,4 +8,4 @@ def definir_strategie(note):
 
 
 # Application sur votre DataFrame
-df['Profil & Stratégie'] = df['Note DPE'].apply(definir_strategie)
+
