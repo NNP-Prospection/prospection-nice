@@ -542,46 +542,51 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         st.table(df_sci)
 
     # ==========================================================================
-    # SYNTHÈSE EXÉCUTIVE IMPRIMABLE / COPIABLE POUR LE CLIENT
+    # SYNTHÈSE EXÉCUTIVE IMPRIMABLE / COPIABLE POUR LE CLIENT (SÉCURISÉE LOI HOGUET)
     # ==========================================================================
     st.divider()
     with st.expander("📄 Générer la Synthèse d'Audit Patrimonial (Prête à copier / remettre au client)", expanded=False):
         date_jour = date.today().strftime("%d/%m/%Y")
-        synthese_texte = f"""AUDIT PATRIMONIAL IMMOBILIER — SYNTHÈSE EXÉCUTIVE
-Date de l'audit : {date_jour}
+        synthese_texte = f"""SYNTHÈSE D'ANALYSE D'ARBITRAGE IMMOBILIER (DOCUMENT PRÉPARATOIRE INDICATIF)
+Cabinet Privé Immobilier Honorat — Transaction Immobilière (Carte T - Loi Hoguet)
+Date de l'étude : {date_jour}
 Dossier : {nom_client} | Localisation de l'actif : {ville_bien}
 ------------------------------------------------------------------------
-1. BILAN PATRIMONIAL & FONDS PROPRES IMMOBILISÉS
+1. VALORISATION & CAPITAL NET IMMOBILISÉ (ESTIMATION)
 - Valeur vénale actuelle estimée : {valeur_venale:,.0f} €
 - Prix d'acquisition initial ({annees_detention} ans de détention) : {prix_achat:,.0f} €
-- Capital Restant Dû (CRD) : {crd:,.0f} € (Mensualité : {mensualite_credit:,.0f} €/mois)
-- Capital Net Immobilisé (Fonds propres nets récupérables) : {capital_net_pinel:,.0f} €
+- Capital Restant Dû (CRD déclaré) : {crd:,.0f} € (Mensualité : {mensualite_credit:,.0f} €/mois)
+- Capital Net Vendeur estimé (Fonds propres nets récupérables) : {capital_net_pinel:,.0f} €
 
-2. DIAGNOSTIC DE RENTABILITÉ SUR FONDS PROPRES (ROE)
+2. ANALYSE DU RENDEMENT SUR FONDS PROPRES IMMOBILISÉS (ROE)
 - Loyers annuels hors charges : {loyer_annuel:,.0f} €/an ({loyer_mensuel_hc:,.0f} €/mois)
 - Charges non récupérables & Taxe foncière : {charges_annuelles:,.0f} €/an
 - Intérêts d'emprunt résiduels déductibles : {interets_annuels:,.0f} €/an
-- Tranche Marginale d'Imposition (TMI) : {tmi} % (+ 17,2 % de prélèvements sociaux)
+- Hypothèse de Tranche Marginale d'Imposition retenue (TMI) : {tmi} % (+ 17,2 % PS)
 
-3. COMPARATIF DES SCÉNARIOS D'ARBITRAGE
-- En maintien LMNP (avec réintégration des amortissements Art. 150 VB CGI) :
-  * Capital Net Vendeur après impôt PV LMNP : {capital_net_lmnp:,.0f} €
-  * Rendement réel des fonds propres (ROE) : {roe_lmnp:.2f} % / an
-- En sortie de Pinel (Location nue / SCI à l'IR) :
-  * Impôt foncier annuel subi : {impot_foncier_nu:,.0f} € / an
-  * Effort d'épargne mensuel post-Pinel : {cf_apres_pinel / 12:,.0f} € / mois
-  * Rendement réel des fonds propres (ROE) : {roe_pinel:.2f} % / an
-- En cas d'arbitrage (Cession de l'actif & Réallocation à {taux_reemploi:.2f} % net) :
-  * Capital net libéré : {capital_net_pinel:,.0f} €
-  * Revenus nets potentiels après réemploi : + {revenu_reemploi_pinel:,.0f} € / an (+ {revenu_reemploi_pinel / 12:,.0f} € / mois)
+3. SIMULATION COMPARATIVE DES SCÉNARIOS IMMOBILIERS
+- Hypothèse A — Maintien en LMNP (avec réintégration amortissements Art. 150 VB CGI) :
+  * Capital Net Vendeur estimé après impôt PV : {capital_net_lmnp:,.0f} €
+  * Rendement indicatif sur fonds propres (ROE) : {roe_lmnp:.2f} % / an
+- Hypothèse B — Sortie de Pinel (Location nue / SCI à l'IR) :
+  * Frottement fiscal foncier annuel estimé : {impot_foncier_nu:,.0f} € / an
+  * Effort de trésorerie mensuel post-Pinel : {cf_apres_pinel / 12:,.0f} € / mois
+  * Rendement indicatif sur fonds propres (ROE) : {roe_pinel:.2f} % / an
+- Hypothèse C — Mise en vente de l'actif & Réemploi théorique ({taux_reemploi:.2f} % net/an) :
+  * Capital net vendeur libérable : {capital_net_pinel:,.0f} €
+  * Projection théorique de revenus après réallocation : + {revenu_reemploi_pinel:,.0f} € / an (+ {revenu_reemploi_pinel / 12:,.0f} € / mois)
+
+------------------------------------------------------------------------
+MENTIONS LÉGALES & CADRE RÉGLEMENTAIRE (LOI HOGUET) :
+Ce document constitue une simulation mathématique et indicative d'aide à la décision,
+réalisée à titre gracieux et strictement accessoire à une estimation immobilière en vue
+d'un projet de transaction (Loi n° 70-9 du 2 janvier 1970 dite « Loi Hoguet » et art. 59
+de la loi n° 71-1130 du 31 décembre 1971). Les calculs reposent sur les éléments déclaratifs
+communiqués par le propriétaire et sur les barèmes fiscaux en vigueur à titre d'illustration.
+Ce document ne constitue ni une consultation juridique ou fiscale personnalisée (relevant
+d'un notaire, avocat fiscaliste ou expert-comptable), ni une prestation de Conseil en
+Investissement Financier (CIF) au sens de l'article L. 541-1 du Code monétaire et financier.
+Le calcul définitif de la plus-value immobilière relève de la compétence exclusive du
+notaire rédacteur de l'acte authentique de vente.
 """.replace(",", " ")
         st.code(synthese_texte, language="text")
-
-
-if __name__ == "__main__":
-    st.set_page_config(
-        page_title="Audit Patrimonial Immobilier",
-        page_icon="🏛️",
-        layout="wide"
-    )
-    render_audit_patrimonial()
