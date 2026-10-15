@@ -2,16 +2,21 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
+# Configuration de la page
+st.set_page_config(
+    page_title="Audit Patrimonial Immobilier",
+    page_icon="🏛️",
+    layout="wide"
+)
+
 # ==============================================================================
 # PENSE-BÊTE / LEXIQUE D'INGÉNIERIE PATRIMONIALE IMMOBILIÈRE (CGP)
-# Ce module centralise les définitions clés pour vos argumentaires en rendez-vous.
 # ==============================================================================
-
 LEXIQUE_PATRIMONIAL_CGP = {
     "ROE": {
         "nom": "Rendement sur Fonds Propres (Return on Equity)",
         "definition": "Pourcentage de gain réel rapporté par le capital net bloqué dans le bien.",
-        "utilite_rdv": "Démontrer au client que si son ROE tombe sous 2%, son capital dorment perd de la valeur face à un réemploi à 5%."
+        "utilite_rdv": "Démontrer au client que si son ROE tombe sous 2%, son capital dormant perd de la valeur face à un réemploi à 5%."
     },
     "Capital Net Immobilisé": {
         "nom": "Equity Nette Vendeur",
@@ -68,6 +73,8 @@ LEXIQUE_PATRIMONIAL_CGP = {
         "piege": "Impossibilité de passer en meublé (> 10 % recettes) sans basculer de force à l'IS."
     }
 }
+
+
 # ==============================================================================
 # MOTEUR DE CALCUL FISCAL & PATRIMONIAL (NORMES 2026)
 # ==============================================================================
@@ -79,7 +86,7 @@ def calcul_abattements_pv(annees_detention: int) -> tuple[float, float]:
     """
     if annees_detention <= 5:
         return 0.0, 0.0
-    
+
     # Abattement Impôt sur le Revenu (Exonération totale à 22 ans)
     if annees_detention >= 22:
         abatt_ir = 1.0
@@ -153,7 +160,6 @@ def calcul_plus_value_immobiliere(
     else:
         travaux = travaux_reels
 
-    # Prix d'acquisition corrigé (minoré des amortissements si LMNP soumis à l'art. 150 VB)
     prix_acq_majore = prix_achat + frais_acq + travaux
     prix_acq_corrige = max(0.0, prix_acq_majore - amortissements_reintegres)
 
@@ -190,8 +196,8 @@ def calcul_plus_value_immobiliere(
 def render_audit_patrimonial():
     st.markdown("## 🏛️ Audit Patrimonial & Arbitrage Immobilier")
     st.caption(
-        "Outil d'ingénierie patrimoniale en rendez-vous client — "
-        "Analyse du Rendement sur Fonds Propres Immobilisés (ROE), Fiscalité & Stratégies de Sortie (Normes 2026)"
+        "Outil d'analyse de performance immobilière en rendez-vous client — "
+        "Calcul du Rendement sur Fonds Propres Immobilisés (ROE), Fiscalité & Scénarios d'Arbitrage (Normes 2026)"
     )
 
     # --- BARRE LATÉRALE : PARAMÈTRES COMMUNS DU DOSSIER CLIENT ---
@@ -199,7 +205,7 @@ def render_audit_patrimonial():
         st.header("👤 Dossier Client & Actif")
         nom_client = st.text_input("Nom du client / Référence", value="M. & Mme Client")
         ville_bien = st.text_input("Localisation du bien", value="Nice")
-        
+
         st.subheader("1. Valorisation & Acquisition")
         valeur_venale = st.number_input("Valeur vénale actuelle estimée (€)", min_value=50000, max_value=10000000, value=360000, step=5000)
         prix_achat = st.number_input("Prix d'acquisition initial (€)", min_value=30000, max_value=10000000, value=300000, step=5000)
@@ -222,22 +228,19 @@ def render_audit_patrimonial():
         )
         tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30, 41, 45], index=2)
         taux_reemploi = st.slider("Rendement net cible en cas de réemploi (%)", min_value=2.0, max_value=9.0, value=5.0, step=0.25)
-tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30, 41, 45], index=2)
-        taux_reemploi = st.slider("Rendement net cible en cas de réemploi (%)", min_value=2.0, max_value=9.0, value=5.0, step=0.25)
-        
+
         # --- PENSE-BÊTE CGP INTÉGRÉ ---
         st.divider()
         with st.expander("📖 Pense-bête & Lexique CGP"):
             terme_choisi = st.selectbox("Rechercher un terme", list(LEXIQUE_PATRIMONIAL_CGP.keys()))
             infos = LEXIQUE_PATRIMONIAL_CGP[terme_choisi]
             st.markdown(f"**{infos['nom']}**")
-            st.write(infos['definition'])
-            if 'formule' in infos:
+            st.write(infos["definition"])
+            if "formule" in infos:
                 st.caption(f"Formule : {infos['formule']}")
-            if 'utilite_rdv' in infos:
-                st.info(infos['utilite_rdv'])
+            if "utilite_rdv" in infos:
+                st.info(infos["utilite_rdv"])
 
-# Calculs de base communs
     # Calculs de base communs
     loyer_annuel = loyer_mensuel_hc * 12
     annuite_credit = mensualite_credit * 12
@@ -272,7 +275,6 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
             )
             exception_residence = st.checkbox("Résidence étudiante / EHPAD (Exonéré de réintégration art. 150 VB)", value=False)
 
-        # 1. Fiscalité sur les loyers LMNP
         taux_ps_lmnp = 0.172
         if regime_lmnp == "Réel Simplifié (Amortissement)":
             resultat_avant_amort = loyer_annuel - charges_annuelles - interets_annuels
@@ -284,7 +286,6 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         cashflow_annuel_lmnp = loyer_annuel - charges_annuelles - annuite_credit - impot_loyers_lmnp
         enrichissement_lmnp = cashflow_annuel_lmnp + capital_amorti_an
 
-        # 2. Calcul de la Plus-Value (Avec et Sans Réintégration LF 2025/2026)
         amort_a_reintegrer = 0.0 if (regime_lmnp.startswith("Micro") or exception_residence) else amort_cumules
         pv_lmnp_actuelle = calcul_plus_value_immobiliere(
             valeur_venale, prix_achat, annees_detention,
@@ -300,12 +301,10 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         )
         surcout_reforme_pv = pv_lmnp_actuelle["total_impot"] - pv_lmnp_ancienne["total_impot"]
 
-        # 3. Capital Net Immobilisé & ROE
         capital_net_lmnp = max(1.0, valeur_venale - crd - pv_lmnp_actuelle["total_impot"] - ira_estimees)
         roe_lmnp = (enrichissement_lmnp / capital_net_lmnp) * 100
         revenu_reemploi_lmnp = capital_net_lmnp * (taux_reemploi / 100.0)
 
-        # Affichage des KPI
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Capital Net Immobilisé", f"{capital_net_lmnp:,.0f} €".replace(",", " "), help="Valeur vénale nette de CRD et de fiscalité PV")
         m2.metric("Cash-Flow Mensuel Net-Net", f"{cashflow_annuel_lmnp / 12:,.0f} € / mois".replace(",", " "), delta=f"Impôt BIC : -{impot_loyers_lmnp:,.0f} €/an".replace(",", " "), delta_color="inverse")
@@ -341,9 +340,9 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
                 "Extinction du risque d'accumulation d'amortissements",
                 f"Réglé à la cession ({pv_lmnp_actuelle['total_impot']:,.0f} €)".replace(",", " "),
                 f"{capital_net_lmnp:,.0f} € liquides et réalloués".replace(",", " "),
-                "Selon nouveau support (SCPI européenne, Assurance-vie, Nouveau bien)",
-                "Fiscalité maîtrisée / nouveau cycle d'amortissement",
-                f"+ {revenu_reemploi_lmnp / 12:,.0f} € / mois (sans gestion)".replace(",", " "),
+                "Selon nouvel arbitrage patrimonial ou immobilier",
+                "Fiscalité maîtrisée / nouveau cycle d'investissement",
+                f"+ {revenu_reemploi_lmnp / 12:,.0f} € / mois (projection théorique)".replace(",", " "),
                 f"+ {revenu_reemploi_lmnp:,.0f} € / an".replace(",", " "),
                 f"{taux_reemploi:.2f} % / an"
             ]
@@ -351,7 +350,7 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         st.table(df_lmnp)
 
         st.info(
-            f"💡 **Argumentaire CGP en rendez-vous ({nom_client}) :** "
+            f"💡 **Point d'analyse ({nom_client}) :** "
             f"Chaque année supplémentaire où le bien est conservé avec un amortissement comptable réduit ({amort_annuel_restant:,.0f} €/an) "
             f"cumule deux effets défavorables : d'une part vos loyers commencent à être taxés à **{tmi + 17.2:.1f} %**, "
             f"et d'autre part les **{amort_cumules:,.0f} € d'amortissements déjà déduits** viennent majorer votre base de plus-value "
@@ -372,20 +371,16 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         with cp3:
             loyer_meuble_potentiel = st.number_input("Loyer mensuel potentiel si bascule en LMNP (€/mois)", min_value=100, max_value=50000, value=int(loyer_mensuel_hc * 1.15), step=25)
 
-        # Réduction d'impôt Pinel qui s'éteint (Pinel classique : 2% de 1 à 9 ans, 1% de 10 à 12 ans)
         taux_reduc_avant = 0.02 if horizon_pinel in ["Fin des 6 ans", "Fin des 9 ans"] else 0.01
         reduction_pinel_perdue = base_pinel * taux_reduc_avant
 
-        # Fiscalité foncière nue (Nom propre)
         revenu_foncier_imposable = max(0.0, loyer_annuel - charges_annuelles - interets_annuels)
         impot_foncier_nu = revenu_foncier_imposable * ((tmi / 100.0) + 0.172)
 
-        # Cash-flow PENDANT Pinel vs APRÈS Pinel
         cf_pendant_pinel = loyer_annuel - charges_annuelles - annuite_credit - impot_foncier_nu + reduction_pinel_perdue
         cf_apres_pinel = loyer_annuel - charges_annuelles - annuite_credit - impot_foncier_nu
         enrichissement_apres_pinel = cf_apres_pinel + capital_amorti_an
 
-        # Plus-value en location nue (0 € de réintégration d'amortissement !)
         pv_pinel = calcul_plus_value_immobiliere(
             valeur_venale, prix_achat, annees_detention,
             utiliser_forfait_frais=forfait_frais,
@@ -396,9 +391,8 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         roe_pinel = (enrichissement_apres_pinel / capital_net_pinel) * 100
         revenu_reemploi_pinel = capital_net_pinel * (taux_reemploi / 100.0)
 
-        # Scénario alternatif : Bascule en LMNP au réel (nécessite congé locataire + ameublement)
         loyer_annuel_meuble = loyer_meuble_potentiel * 12
-        amort_potentiel_bascule = (valeur_venale * 0.80) / 30.0  # 80% bâti amorti sur 30 ans
+        amort_potentiel_bascule = (valeur_venale * 0.80) / 30.0
         base_bic_bascule = max(0.0, loyer_annuel_meuble - charges_annuelles - interets_annuels - amort_potentiel_bascule)
         impot_bic_bascule = base_bic_bascule * ((tmi / 100.0) + 0.172)
         cf_bascule_lmnp = loyer_annuel_meuble - charges_annuelles - annuite_credit - impot_bic_bascule
@@ -427,7 +421,7 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
                 f"{cf_apres_pinel / 12:,.0f} € / mois".replace(",", " "),
                 f"+ {enrichissement_apres_pinel:,.0f} € / an".replace(",", " "),
                 f"{roe_pinel:.2f} % / an",
-                "Effort d'épargne maximal et fiscalité confiscatoire"
+                "Effort d'épargne maximal et fiscalité foncière"
             ],
             "2. Basculer en LMNP (Si départ locataire)": [
                 f"{loyer_annuel_meuble:,.0f} € / an".replace(",", " "),
@@ -439,10 +433,10 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
                 "Impossible tant que le locataire reste ; réintégration amort. à la revente (LF 2025)"
             ],
             f"3. Vendre & Réallouer ({taux_reemploi:.1f} % net)": [
-                f"{revenu_reemploi_pinel:,.0f} € / an (Revenus du capital)".replace(",", " "),
+                f"{revenu_reemploi_pinel:,.0f} € / an (Revenus théoriques)".replace(",", " "),
                 "Capital purgé d'impôt PV (Forfaits 22,5 % acquis)",
                 f"Impôt PV à la vente : {pv_pinel['total_impot']:,.0f} €".replace(",", " "),
-                f"+ {revenu_reemploi_pinel / 12:,.0f} € / mois (ou capitalisation)".replace(",", " "),
+                f"+ {revenu_reemploi_pinel / 12:,.0f} € / mois (projection)".replace(",", " "),
                 f"+ {revenu_reemploi_pinel:,.0f} € / an".replace(",", " "),
                 f"{taux_reemploi:.2f} % / an",
                 "Vente libre valorisée à 100 % sans décote d'occupation"
@@ -463,22 +457,18 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
         with cs3:
             reduc_pinel_sci = st.number_input("Réduction Pinel annuelle qui prend fin (€/an)", min_value=0, max_value=18000, value=6000, step=500)
 
-        # Calculs SCI à l'IR (Transparence fiscale)
         resultat_foncier_sci = max(0.0, loyer_annuel - charges_annuelles - interets_annuels)
         impot_associes_ir = resultat_foncier_sci * ((tmi / 100.0) + 0.172)
         tresorerie_nette_sci_avant_impot = loyer_annuel - charges_annuelles - annuite_credit
         tresorerie_nette_associes_ir = tresorerie_nette_sci_avant_impot - impot_associes_ir
-        
-        # Effet "Trésorerie Fantôme" : les associés paient de l'impôt sur le capital bancaire remboursé par la SCI
+
         effet_tresorerie_fantome = resultat_foncier_sci - tresorerie_nette_sci_avant_impot
 
-        # Simulation Passage à l'IS
         amort_sci_is = (valeur_venale * 0.80) / 30.0
         resultat_fiscal_is = max(0.0, loyer_annuel - charges_annuelles - interets_annuels - amort_sci_is)
         impot_societe_is = resultat_fiscal_is * 0.15 if resultat_fiscal_is <= 42500 else (42500 * 0.15 + (resultat_fiscal_is - 42500) * 0.25)
         tresorerie_sci_is = loyer_annuel - charges_annuelles - annuite_credit - impot_societe_is
 
-        # Vente par la SCI à l'IR aujourd'hui (Régime des particuliers !)
         pv_sci_ir = calcul_plus_value_immobiliere(
             valeur_venale, prix_achat, annees_detention,
             utiliser_forfait_frais=forfait_frais,
@@ -509,7 +499,7 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
                 "Trésorerie nette mensuelle pour les associés",
                 "Régime de Plus-Value en cas de vente du bien",
                 "Fiscalité pour sortir le cash de la SCI vers les associés",
-                "Diagnostic CGP"
+                "Synthèse Comparative"
             ],
             "Voie 1 : Maintien SCI à l'IR (Location Nue)": [
                 "Interdit (risque de bascule IS forcée > 10 % recettes)",
@@ -529,10 +519,10 @@ tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30,
                 "Flat Tax 30 % sur dividendes (hors remboursement du CCA)",
                 "Piège à la sortie : double taxation (IS sur PV + Flat Tax 30 %)"
             ],
-            "Voie 3 : Vente de l'actif par la SCI à l'IR (Recommandé)": [
+            "Voie 3 : Vente de l'actif par la SCI à l'IR": [
                 "Sans objet (Cession du bien libre)",
                 "Extinction de la friction fiscale foncière",
-                f"0 € d'impôt annuel futur",
+                "0 € d'impôt annuel futur",
                 f"+ {(capital_net_sci * (taux_reemploi / 100.0)) / 12:,.0f} € / mois après réemploi".replace(",", " "),
                 f"Exonération des amortissements + Abattements acquis ({pv_sci_ir['total_impot']:,.0f} €)".replace(",", " "),
                 f"Distribution libre des {capital_net_sci:,.0f} € aux associés (0 % Flat Tax)".replace(",", " "),
@@ -590,3 +580,6 @@ Le calcul définitif de la plus-value immobilière relève de la compétence exc
 notaire rédacteur de l'acte authentique de vente.
 """.replace(",", " ")
         st.code(synthese_texte, language="text")
+
+
+render_audit_patrimonial()
