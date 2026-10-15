@@ -3,6 +3,72 @@ import pandas as pd
 from datetime import date
 
 # ==============================================================================
+# PENSE-BÊTE / LEXIQUE D'INGÉNIERIE PATRIMONIALE IMMOBILIÈRE (CGP)
+# Ce module centralise les définitions clés pour vos argumentaires en rendez-vous.
+# ==============================================================================
+
+LEXIQUE_PATRIMONIAL_CGP = {
+    "ROE": {
+        "nom": "Rendement sur Fonds Propres (Return on Equity)",
+        "definition": "Pourcentage de gain réel rapporté par le capital net bloqué dans le bien.",
+        "utilite_rdv": "Démontrer au client que si son ROE tombe sous 2%, son capital dorment perd de la valeur face à un réemploi à 5%."
+    },
+    "Capital Net Immobilisé": {
+        "nom": "Equity Nette Vendeur",
+        "definition": "Somme nette disponible sur le compte en cas de vente immédiate.",
+        "formule": "Valeur Vénale - Capital Restant Dû (CRD) - Impôt sur la Plus-Value - IRA"
+    },
+    "CRD": {
+        "nom": "Capital Restant Dû",
+        "definition": "Montant total de la dette restant à rembourser à la banque.",
+        "source": "Tableau d'amortissement de l'emprunt bancaire."
+    },
+    "IMP": {
+        "nom": "Impôt sur la Plus-Value Immobilière",
+        "definition": "Taxe sur la plus-value brute (Prix de vente - Prix d'acquisition majoré).",
+        "majoration": "Forfait frais d'acquisition (7,5 %) + Forfait travaux (15 % si bien > 5 ans)."
+    },
+    "Cash-Flow Net": {
+        "nom": "Trésorerie Nette Après Impôts",
+        "definition": "Flux de trésorerie réel généré chaque mois par le bien.",
+        "formule": "Loyers - Charges (foncière, copro, PNO) - Mensualité crédit - Impôt sur les loyers."
+    },
+    "Capital Bancaire": {
+        "nom": "Capital Amorti / Épargne Forcée",
+        "definition": "Part de la mensualité de crédit qui rembourse le capital (et non les intérêts).",
+        "regle": "S'ajoute au cash-flow pour mesurer l'enrichissement réel de l'année."
+    },
+    "BIC": {
+        "nom": "Bénéfices Industriels et Commerciaux",
+        "definition": "Catégorie fiscale de la location meublée (LMNP).",
+        "avantage": "Permet de déduire l'amortissement comptable du bien et du mobilier pour effacer l'impôt."
+    },
+    "TMI": {
+        "nom": "Tranche Marginale d'Imposition",
+        "definition": "Taux personnel d'impôt sur le revenu du client (0%, 11%, 30%, 41%, 45%).",
+        "cumul": "S'ajoute toujours aux 17,2 % de prélèvements sociaux en location nue ou BIC."
+    },
+    "Abattement IR (22 ans)": {
+        "nom": "Exonération Impôt sur le Revenu Plus-Value",
+        "definition": "Acquisition progressive d'abattements sur la plus-value immobilière.",
+        "seuil": "Exonération totale de l'impôt (19 %) atteinte au bout de 22 ans de détention."
+    },
+    "Abattement PS (30 ans)": {
+        "nom": "Exonération Prélèvements Sociaux Plus-Value",
+        "definition": "Diminution progressive des prélèvements sociaux (17,2 %).",
+        "seuil": "Exonération totale atteinte au bout de 30 ans de détention."
+    },
+    "Nom Propre": {
+        "nom": "Détention en Personne Physique",
+        "definition": "Propriété directe du bien par le particulier (ou en indivision), hors structure sociétaire."
+    },
+    "SCI à l'IR": {
+        "nom": "Société Civile Immobilière à l'Impôt sur le Revenu",
+        "definition": "Structure transparente fiscalement : les associés paient l'impôt selon leur TMI.",
+        "piege": "Impossibilité de passer en meublé (> 10 % recettes) sans basculer de force à l'IS."
+    }
+}
+# ==============================================================================
 # MOTEUR DE CALCUL FISCAL & PATRIMONIAL (NORMES 2026)
 # ==============================================================================
 
@@ -156,7 +222,22 @@ def render_audit_patrimonial():
         )
         tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30, 41, 45], index=2)
         taux_reemploi = st.slider("Rendement net cible en cas de réemploi (%)", min_value=2.0, max_value=9.0, value=5.0, step=0.25)
+tmi = st.selectbox("Tranche Marginale d'Imposition (TMI %)", options=[0, 11, 30, 41, 45], index=2)
+        taux_reemploi = st.slider("Rendement net cible en cas de réemploi (%)", min_value=2.0, max_value=9.0, value=5.0, step=0.25)
+        
+        # --- PENSE-BÊTE CGP INTÉGRÉ ---
+        st.divider()
+        with st.expander("📖 Pense-bête & Lexique CGP"):
+            terme_choisi = st.selectbox("Rechercher un terme", list(LEXIQUE_PATRIMONIAL_CGP.keys()))
+            infos = LEXIQUE_PATRIMONIAL_CGP[terme_choisi]
+            st.markdown(f"**{infos['nom']}**")
+            st.write(infos['definition'])
+            if 'formule' in infos:
+                st.caption(f"Formule : {infos['formule']}")
+            if 'utilite_rdv' in infos:
+                st.info(infos['utilite_rdv'])
 
+# Calculs de base communs
     # Calculs de base communs
     loyer_annuel = loyer_mensuel_hc * 12
     annuite_credit = mensualite_credit * 12
