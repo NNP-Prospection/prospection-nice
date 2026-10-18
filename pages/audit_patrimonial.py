@@ -2,12 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-# Configuration de la page
-st.set_page_config(
-    page_title="Audit Patrimonial Immobilier",
-    page_icon="🏛️",
-    layout="wide"
-)
+
 
 # ==============================================================================
 # PENSE-BÊTE / LEXIQUE D'INGÉNIERIE PATRIMONIALE IMMOBILIÈRE (CGP)
