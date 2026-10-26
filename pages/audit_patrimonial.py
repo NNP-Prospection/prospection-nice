@@ -173,18 +173,31 @@ def calcul_plus_value_immobiliere(
 
 
 # ==============================================================================
-# INTERFACE PRINCIPALE D'AUDIT PATRIMONIAL
+# INTERFACE PRINCIPALE D'AUDIT PATRIMONIAL & FOCUS TERRAIN
 # ==============================================================================
 
 def render_audit_patrimonial():
-    st.markdown("## 🏛️ Audit Patrimonial & Arbitrage Immobilier")
+    st.markdown("## 💼 Audit Patrimonial, Focus Quartier & Arbitrage")
     st.caption(
-        "Outil d'analyse de performance immobilière en rendez-vous client — "
-        "Calcul du Rendement sur Fonds Propres Immobilisés (ROE), Fiscalité & Scénarios d'Arbitrage (Normes 2026)"
+        "Outil de terrain ultra-léger et d'analyse de performance immobilière — "
+        "Calcul du Rendement sur Fonds Propres (ROE), Fiscalité & Scénarios d'Arbitrage (Normes 2026)"
     )
+
+    # --- CHARGEMENT FICHIER LOCAL POUR FOCUS TERRAIN ---
+    try:
+        df_audit = pd.read_csv('dpe_nice_fg.csv')
+    except Exception:
+        df_audit = pd.DataFrame()
 
     # --- BARRE LATÉRALE ---
     with st.sidebar:
+        st.header("📍 Focus Terrain / Quartier")
+        quartier_cible = st.selectbox(
+            "Sélectionner le quartier du rendez-vous",
+            ["-- Vue Globale Simulation --", "Carré d'Or", "Promenade des Anglais", "Port / Garibaldi", "Mont Boron", "Musiciens / Gambetta", "Centre-ville"]
+        )
+
+        st.divider()
         st.header("👤 Dossier Client & Actif")
         nom_client = st.text_input("Nom du client / Référence", value="M. & Mme Client")
         ville_bien = st.text_input("Localisation du bien", value="Nice")
@@ -222,6 +235,73 @@ def render_audit_patrimonial():
                 st.caption(f"Formule : {infos['formule']}")
             if "utilite_rdv" in infos:
                 st.info(infos["utilite_rdv"])
+
+    # --- FOCUS QUARTIER ( SI SÉLECTIONNÉ ) ---
+    if quartier_cible != "-- Vue Globale Simulation --":
+        st.success(f"🎯 Analyse éclair de terrain pour le secteur : **{quartier_cible}**")
+        
+        infos_quartiers = {
+            "Carré d'Or": {
+                "valeur_ref": "8 500 € à 11 000 € / m²",
+                "tendance": "Forte tension, forte demande sur les petites surfaces et les biens patrimoniaux de standing.",
+                "arguments": "Impact fort des passoires énergétiques : les acquéreurs recherchent des décotes pour travaux, argument idéal pour négocier un mandat exclusif vendeur."
+            },
+            "Promenade des Anglais": {
+                "valeur_ref": "7 000 € à 10 500 € / m² (selon vue mer)",
+                "tendance": "Marché orienté résidences secondaires et investissements patrimoniaux d'envergure.",
+                "arguments": "Le cycle de détention y est souvent de 5 à 7 ans. Sensibilité accrue aux charges de copropriété et aux performances énergétiques."
+            },
+            "Port / Garibaldi": {
+                "valeur_ref": "6 500 € à 9 000 € / m²",
+                "tendance": "Secteur très recherché, dynamique et branché, prisé par une clientèle active et locale.",
+                "arguments": "Immeubles anciens à fort cachet mais souvent classés en DPE F ou G (gros potentiel de valorisation post-rénovation)."
+            },
+            "Mont Boron": {
+                "valeur_ref": "8 000 € à 12 000+ € / m²",
+                "tendance": "Quartier résidentiel haut de gamme, villas et résidences de standing avec vues panoramiques.",
+                "arguments": "Confidentialité, discrétion et stratégie d'accompagnement patrimonial global indispensables."
+            },
+            "Musiciens / Gambetta": {
+                "valeur_ref": "5 000 € à 7 500 € / m²",
+                "tendance": "Secteur familial et central, forte demande locative et résidentielle.",
+                "arguments": "Idéal pour aborder la rentabilité locative, le dispositif LMNP et l'anticipation de la revente face aux contraintes énergétiques."
+            },
+            "Centre-ville": {
+                "valeur_ref": "5 500 € à 8 000 € / m²",
+                "tendance": "Cœur commerçant, proximité immédiate du tramway et des commodités.",
+                "arguments": "Liquidité rapide des biens bien positionnés en prix, nécessité d'un mandat exclusif pour contrer la concurrence."
+            }
+        }
+        
+        data_q = infos_quartiers.get(quartier_cible, {})
+        qc1, qc2 = st.columns(2)
+        with qc1:
+            st.metric("📊 Fourchette de prix estimative", data_q.get("valeur_ref", "N/C"))
+        with qc2:
+            st.metric("📈 Dynamique du marché", "Secteur Actif & Qualifié")
+            
+        st.markdown("💡 **Arguments clés pour votre rendez-vous :**")
+        st.info(f"**Tendance locale :** {data_q.get('tendance', '')}")
+        st.warning(f"**Angle de négociation / Mandat :** {data_q.get('arguments', '')}")
+        
+        if not df_audit.empty:
+            rues_q = {
+                "Carré d'Or": ["france", "massena", "paradis", "suede", "verdun", "meyerbeer"],
+                "Promenade des Anglais": ["promenade des anglais", "etats-unis"],
+                "Port / Garibaldi": ["garibaldi", "lunel", "cassini", "barla", "arson"],
+                "Mont Boron": ["mont boron", "jean lorrain", "carnot", "germaine"],
+                "Musiciens / Gambetta": ["gambetta", "berlioz", "gounod", "rossini", "verdi"],
+                "Centre-ville": ["jean medecin", "gioffredo", "marechal foch"]
+            }
+            mots = rues_q.get(quartier_cible, [])
+            col_adr = next((c for c in ['adresse_ban', 'adresse_brute', 'adresse_propriete'] if c in df_audit.columns), None)
+            if col_adr and mots:
+                pattern = '|'.join(mots)
+                df_mini = df_audit[df_audit[col_adr].astype(str).str.lower().str.contains(pattern, na=False, regex=True)].head(5)
+                if not df_mini.empty:
+                    st.markdown("### 📋 Exemples d'actifs repérés dans la zone :")
+                    st.dataframe(df_mini[[col_adr]], use_container_width=True)
+        st.divider()
 
     loyer_annuel = loyer_mensuel_hc * 12
     annuite_credit = mensualite_credit * 12
