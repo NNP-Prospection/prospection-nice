@@ -917,28 +917,21 @@ if st.session_state.analyse_terminee:
               f' lot : {str_reperage}'
           )
 
-          courrier_modele = """Nice, le {date_jour}
-
-{destinataire_affichage}
-Adresse du bien : {adresse.title()}
-
-{appel_destinataire}
-
-Objet : {objet_courrier}
-
-En qualité de Conseil en Immobilier Patrimonial et forte d'une expertise pointue en droit de l'urbanisme, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.
-
-{paragraphe_strategique}
-
-Je me tiens à votre entière disposition pour réaliser un audit patrimonial confidentiel (incluant le chiffrage précis de votre plus-value nette et des potentiels de votre lot) et vous accompagner dans vos réflexions.
-
-Bien cordialement,
-
-Nathalie Parra
-Conseil en Immobilier Patrimonial
-
-CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE"""
+       courrier_modele = (
+              f"Nice, le {date_jour}\n\n"
+              f"{destinataire_affichage}\n"
+              f"Adresse du bien : {adresse.title()}\n\n"
+              f"{appel_destinataire}\n\n"
+              f"Objet : {objet_courrier}\n\n"
+              "En qualité de Conseil en Immobilier Patrimonial et forte d'une expertise pointue en droit de l'urbanisme, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.\n\n"
+              f"{paragraphe_strategique}\n\n"
+              "Je me tiens à votre entière disposition pour réaliser un audit patrimonial confidentiel (incluant le chiffrage précis de votre plus-value nette et des potentiels de votre lot) et vous accompagner dans vos réflexions.\n\n"
+              "Bien cordialement,\n\n"
+              "Nathalie Parra\n"
+              "Conseil en Immobilier Patrimonial\n\n"
+              "CABINET PRIVÉ IMMOBILIER HONORAT\n"
+              "TRANSACTION . CONSEIL . PATRIMOINE"
+          )
 
           st.text_area(
               f"📄 Courrier ({choix_effectif.split('.')[0]}) - {adresse.title()}",
