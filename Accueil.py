@@ -917,7 +917,7 @@ if st.session_state.analyse_terminee:
               f' lot : {str_reperage}'
           )
 
-          courrier_modele = f"""Nice, le {date_jour}
+          courrier_modele = """Nice, le {date_jour}
 
 {destinataire_affichage}
 Adresse du bien : {adresse.title()}
