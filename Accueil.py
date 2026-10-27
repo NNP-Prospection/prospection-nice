@@ -706,267 +706,238 @@ if st.session_state.analyse_terminee:
         st.info('ℹ️ Aucun bien correspondant dans ce lot.')
 
   with tab3:
-    if 'Adresse Exacte' in st.session_state.df_affichage.columns:
+    if "Adresse Exacte" in st.session_state.df_affichage.columns:
       liste_adresses = (
-          st.session_state.df_affichage['Adresse Exacte']
+          st.session_state.df_affichage["Adresse Exacte"]
           .dropna()
           .unique()
           .tolist()
       )
 
       lignes_sel = []
-      if (
-          'event_selection' in locals()
-          and event_selection
-          and isinstance(event_selection, dict)
-      ):
-        lignes_sel = event_selection.get('selection', {}).get('rows', [])
+      if 'event_selection' in locals() and event_selection and isinstance(event_selection, dict):
+          lignes_sel = event_selection.get('selection', {}).get('rows', [])
 
       adresses_defaut = [
           liste_adresses[i] for i in lignes_sel if i < len(liste_adresses)
       ]
       if not adresses_defaut and liste_adresses:
-        adresses_defaut = liste_adresses[:5]
+          adresses_defaut = liste_adresses[:5]
 
       col_sel, col_angle = st.columns([2, 1])
       with col_sel:
-        adresses_selectionnees = st.multiselect(
-            '📍 Adresses sélectionnées pour le publipostage :',
-            liste_adresses,
-            default=adresses_defaut,
-            key='multiselect_adresses_publi',
-        )
+          adresses_selectionnees = st.multiselect(
+              "📍 Adresses sélectionnées pour le publipostage :",
+              liste_adresses,
+              default=adresses_defaut,
+              key="multiselect_adresses_publi"
+          )
       with col_angle:
-        angle_courrier = st.selectbox(
-            '🎯 Angle d’attaque du courrier :',
-            [
-                'Automatique (Selon les signaux du bien)',
-                '1. Impasse Location Saisonnière & Quotas Nice (Zone 3)',
-                '2. Travaux de Copropriété & Rénovation Énergétique (RNIC)',
-                '3. Pression Fiscale Résidence Secondaire (THRS) & Vacance',
-                '4. Arbitrage Patrimonial Classique (Cycle ~5 ans / Plus-value)',
-            ],
-            key='select_angle_courrier',
-        )
+          angle_courrier = st.selectbox(
+              "🎯 Angle d’attaque du courrier :",
+              [
+                  "Automatique (Selon les signaux du bien)",
+                  "1. Impasse Location Saisonnière & Quotas Nice (Zone 3)",
+                  "2. Travaux de Copropriété & Rénovation Énergétique (RNIC)",
+                  "3. Pression Fiscale Résidence Secondaire (THRS) & Vacance",
+                  "4. Arbitrage Patrimonial Classique (Cycle ~5 ans / Plus-value)",
+              ],
+              key="select_angle_courrier"
+          )
 
       if adresses_selectionnees:
-        date_jour = datetime.now().strftime('%d/%m/%Y')
-        if st.button(
-            "🖨️ Préparer l'impression groupée",
-            type='primary',
-            key='btn_impression_gp',
-        ):
-          st.success('📄 Courriers prêts pour l’impression.')
+          date_jour = datetime.now().strftime("%d/%m/%Y")
+          if st.button("🖨️ Préparer l'impression groupée", type="primary", key="btn_impression_gp"):
+              st.success("📄 Courriers prêts pour l’impression.")
 
-        for adresse in adresses_selectionnees:
-          df_filtre_adr = st.session_state.df_affichage[
-              st.session_state.df_affichage['Adresse Exacte'] == adresse
-          ]
-          if df_filtre_adr.empty:
-            continue
-          ligne_bien = df_filtre_adr.iloc[0]
+          for adresse in adresses_selectionnees:
+              df_filtre_adr = st.session_state.df_affichage[
+                  st.session_state.df_affichage["Adresse Exacte"] == adresse
+              ]
+              if df_filtre_adr.empty:
+                  continue
+              ligne_bien = df_filtre_adr.iloc[0]
 
-          infos_sirene = enrichir_avec_sirene(adresse)
+              infos_sirene = enrichir_avec_sirene(adresse)
 
-          apt = formater_numero(ligne_bien.get('N° Apt', ''))
-          lot = formater_numero(ligne_bien.get('N° Lot', ''))
-          etage = formater_numero(ligne_bien.get('Étage', ''))
-          bat = formater_numero(ligne_bien.get('Bâtiment', ''))
-          surf = formater_numero(ligne_bien.get('Surface m²', ''))
-          note_dpe = str(ligne_bien.get('Note DPE', '')).strip().upper()
-          profil_bien = str(ligne_bien.get('Profil & Stratégie', ''))
-          signaux_bien = str(
-              ligne_bien.get('Signaux Data (Airbnb / Copro / THRS)', '')
-          )
-          nb_dpe_imm = int(ligne_bien.get('DPE Immeuble', 1))
-
-          infos_repere = []
-          if bat:
-            infos_repere.append(f'Bât. {bat}')
-          if etage:
-            infos_repere.append(f'Étage : {etage}')
-          if apt:
-            infos_repere.append(f'Apt {apt}')
-          if lot:
-            infos_repere.append(f'Lot n° {lot}')
-          if surf:
-            infos_repere.append(f'{surf} m²')
-          str_reperage = (
-              ' | '.join(infos_repere) if infos_repere else 'Bien identifié'
-          )
-
-          st.markdown(f'### 📍 {adresse.title()} — Ciblage : `{str_reperage}`')
-
-          destinataire_nom = 'Propriétaire / Copropriétaire'
-          appel_destinataire = (
-              f'Madame, Monsieur (Propriétaire du lot - {str_reperage}),'
-          )
-          if infos_sirene:
-            annee_info = (
-                f" (Né en {infos_sirene['annee_naissance']})"
-                if infos_sirene.get('annee_naissance')
-                else ''
-            )
-            st.info(
-                f"🏢 **Entité détectée à cette adresse (API INPI) :**"
-                f" {infos_sirene['structure']} (SIREN : {infos_sirene['siren']})"
-                f" | **Dirigeant :** {infos_sirene['gerant'] or 'Non renseigné'}{annee_info}"
-                f" | **Statut :** {infos_sirene['statut_bodacc']}"
-            )
-            if infos_sirene.get('gerant'):
-              utiliser_gerant = st.checkbox(
-                  f"Adresser le courrier à {infos_sirene['gerant']} ({infos_sirene['structure']})",
-                  value=False,
-                  key=f'chk_sirene_{adresse}',
+              apt = formater_numero(ligne_bien.get("N° Apt", ""))
+              lot = formater_numero(ligne_bien.get("N° Lot", ""))
+              etage = formater_numero(ligne_bien.get("Étage", ""))
+              bat = formater_numero(ligne_bien.get("Bâtiment", ""))
+              surf = formater_numero(ligne_bien.get("Surface m²", ""))
+              note_dpe = str(ligne_bien.get("Note DPE", "")).strip().upper()
+              profil_bien = str(ligne_bien.get("Profil & Stratégie", ""))
+              signaux_bien = str(
+                  ligne_bien.get("Signaux Data (Airbnb / Copro / THRS)", "")
               )
-              if utiliser_gerant:
-                destinataire_nom = (
-                    f"{infos_sirene['structure']} - À l'attention de"
-                    f" {infos_sirene['gerant']}"
-                )
-                appel_destinataire = f"Madame, Monsieur {infos_sirene['gerant']},"
+              nb_dpe_imm = int(ligne_bien.get("DPE Immeuble", 1))
 
-          choix_effectif = angle_courrier
-          if angle_courrier == 'Automatique (Selon les signaux du bien)':
-            if 'Impasse Airbnb' in signaux_bien:
-              choix_effectif = (
-                  '1. Impasse Location Saisonnière & Quotas Nice (Zone 3)'
-              )
-            elif 'Copro active' in signaux_bien:
-              choix_effectif = (
-                  '2. Travaux de Copropriété & Rénovation Énergétique (RNIC)'
-              )
-            elif 'Passoire' in profil_bien or note_dpe in ['F', 'G']:
-              choix_effectif = (
-                  '3. Pression Fiscale Résidence Secondaire (THRS) & Vacance'
-              )
-            else:
-              choix_effectif = (
-                  '4. Arbitrage Patrimonial Classique (Cycle ~5 ans / Plus-value)'
+              infos_repere = []
+              if bat:
+                  infos_repere.append(f"Bât. {bat}")
+              if etage:
+                  infos_repere.append(f"Étage : {etage}")
+              if apt:
+                  infos_repere.append(f"Apt {apt}")
+              if lot:
+                  infos_repere.append(f"Lot n° {lot}")
+              if surf:
+                  infos_repere.append(f"{surf} m²")
+              str_reperage = (
+                  " | ".join(infos_repere) if infos_repere else "Bien identifié"
               )
 
-          if choix_effectif.startswith('1.'):
-            objet_courrier = (
-                'Réglementation des meublés de tourisme à Nice, DPE et'
-                f' arbitrage patrimonial — {adresse.title()} ({str_reperage})'
-            )
-            paragraphe_strategique = (
-                'Le durcissement simultané de la réglementation métropolitaine'
-                ' niçoise sur les meublés de tourisme (quotas stricts en Zone'
-                ' 3 hypercentre et obligation de justifier d’un DPE classé'
-                ' entre A et E pour obtenir ou renouveler une autorisation de'
-                ' changement d’usage) et de la fiscalité locative place'
-                ' aujourd’hui de nombreux propriétaires devant un choix'
-                ' stratégique.\n\nPlutôt que de subir une immobilisation'
-                ' locative ou des travaux énergétiques lourds à la rentabilité'
-                ' incertaine, une cession optimisée sur le marché actuel du'
-                ' Carré d’Or permet de cristalliser votre plus-value nette'
-                ' auprès d’acquéreurs patrimoniaux ciblés.'
-            )
-          elif choix_effectif.startswith('2.'):
-            objet_courrier = (
-                'Évolution énergétique de votre copropriété et étude'
-                f' d’arbitrage — {adresse.title()} ({str_reperage})'
-            )
-            paragraphe_strategique = (
-                f'Nous observons actuellement une forte activité diagnostique'
-                f' au sein de votre immeuble ({nb_dpe_imm} diagnostics'
-                ' enregistrés récemment), signe fréquent d’une réflexion'
-                ' collective sur la rénovation énergétique, le ravalement ou la'
-                ' mise en conformité des lots.\n\nDans les immeubles bourgeois'
-                ' niçois, le vote d’appels de fonds importants en Assemblée'
-                ' Générale pèse directement sur le rendement net des'
-                ' copropriétaires. Étudier la valorisation de votre lot en'
-                ' amont de ces échéances vous permet d’arbitrer sereinement et'
-                ' de préserver votre capital.'
-            )
-          elif choix_effectif.startswith('3.'):
-            objet_courrier = (
-                'Pression fiscale (THRS / DPE) et valorisation de votre actif'
-                f' au {adresse.title()} ({str_reperage})'
-            )
-            paragraphe_strategique = (
-                'La détention d’un actif immobilier dans le cœur de Nice fait'
-                ' face aujourd’hui à une double pression : les contraintes du'
-                ' calendrier énergétique (classes F et G) et la majoration'
-                ' maximale de la Taxe d’Habitation sur les Résidences'
-                ' Secondaires et logements peu occupés.\n\nAfin d’éviter que'
-                ' ces charges et obligations de travaux n’érodent votre'
-                ' patrimoine, notre Cabinet réalise pour vous une simulation'
-                ' complète comparant le coût de conservation (travaux, fiscalité)'
-                ' au capital net que vous dégageriez immédiatement en cas de'
-                ' cession.'
-            )
-          else:
-            objet_courrier = (
-                'Optimisation patrimoniale et opportunité d’arbitrage pour'
-                f' votre actif au {adresse.title()} ({str_reperage})'
-            )
-            paragraphe_strategique = (
-                'Dans le cadre d’une gestion dynamique de votre patrimoine'
-                ' immobilier et au regard des conditions de marché actuelles'
-                ' sur les secteurs les plus recherchés de Nice (notamment après'
-                ' un cycle d’environ 5 ans), l’étude d’un arbitrage ou d’une'
-                ' valorisation optimale de votre actif représente une'
-                ' opportunité stratégique pour sécuriser vos plus-values et'
-                ' réallouer vos capitaux.'
-            )
+              st.markdown(f"### 📍 {adresse.title()} — Ciblage : `{str_reperage}`")
 
-          destinataire_affichage = (
-              f'Destinataire : {destinataire_nom}\nLocalisation du'
-              f' lot : {str_reperage}'
-          )
+              destinataire_nom = "Propriétaire / Copropriétaire"
+              appel_destinataire = (
+                  f"Madame, Monsieur (Propriétaire du lot - {str_reperage}),"
+              )
+              if infos_sirene:
+                  annee_info = (
+                      f" (Né en {infos_sirene['annee_naissance']})"
+                      if infos_sirene.get("annee_naissance")
+                      else ""
+                  )
+                  st.info(
+                      f"🏢 **Entité détectée à cette adresse (API INPI) :**"
+                      f" {infos_sirene['structure']} (SIREN : {infos_sirene['siren']})"
+                      f" | **Dirigeant :** {infos_sirene['gerant'] or 'Non renseigné'}{annee_info}"
+                      f" | **Statut :** {infos_sirene['statut_bodacc']}"
+                  )
+                  if infos_sirene.get("gerant"):
+                      utiliser_gerant = st.checkbox(
+                          f"Adresser le courrier à {infos_sirene['gerant']} ({infos_sirene['structure']})",
+                          value=False,
+                          key=f"chk_sirene_{adresse}",
+                      )
+                      if utiliser_gerant:
+                          destinataire_nom = (
+                              f"{infos_sirene['structure']} - À l'attention de"
+                              f" {infos_sirene['gerant']}"
+                          )
+                          appel_destinataire = f"Madame, Monsieur {infos_sirene['gerant']},"
 
-       courrier_modele = (
-              f"Nice, le {date_jour}\n\n"
-              f"{destinataire_affichage}\n"
-              f"Adresse du bien : {adresse.title()}\n\n"
-              f"{appel_destinataire}\n\n"
-              f"Objet : {objet_courrier}\n\n"
-              "En qualité de Conseil en Immobilier Patrimonial et forte d'une expertise pointue en droit de l'urbanisme, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.\n\n"
-              f"{paragraphe_strategique}\n\n"
-              "Je me tiens à votre entière disposition pour réaliser un audit patrimonial confidentiel (incluant le chiffrage précis de votre plus-value nette et des potentiels de votre lot) et vous accompagner dans vos réflexions.\n\n"
-              "Bien cordialement,\n\n"
-              "Nathalie Parra\n"
-              "Conseil en Immobilier Patrimonial\n\n"
-              "CABINET PRIVÉ IMMOBILIER HONORAT\n"
-              "TRANSACTION . CONSEIL . PATRIMOINE"
-          )
+              choix_effectif = angle_courrier
+              if angle_courrier == "Automatique (Selon les signaux du bien)":
+                  if "Impasse Airbnb" in signaux_bien:
+                      choix_effectif = (
+                          "1. Impasse Location Saisonnière & Quotas Nice (Zone 3)"
+                      )
+                  elif "Copro active" in signaux_bien:
+                      choix_effectif = (
+                          "2. Travaux de Copropriété & Rénovation Énergétique (RNIC)"
+                      )
+                  elif "Passoire" in profil_bien or note_dpe in ['F', 'G']:
+                      choix_effectif = (
+                          "3. Pression Fiscale Résidence Secondaire (THRS) & Vacance"
+                      )
+                  else:
+                      choix_effectif = (
+                          "4. Arbitrage Patrimonial Classique (Cycle ~5 ans / Plus-value)"
+                      )
 
-          # Titre sécurisé sans expression complexe imbriquée
-          nom_champ_courrier = f"📄 Courrier - {adresse.title()}"
+              if choix_effectif.startswith("1."):
+                  objet_courrier = (
+                      "Réglementation des meublés de tourisme à Nice, DPE et"
+                      f" arbitrage patrimonial — {adresse.title()} ({str_reperage})"
+                  )
+                  paragraphe_strategique = (
+                      "Le durcissement simultané de la réglementation métropolitaine"
+                      " niçoise sur les meublés de tourisme (quotas stricts en Zone"
+                      " 3 hypercentre et obligation de justifier d’un DPE classé"
+                      " entre A et E pour obtenir ou renouveler une autorisation de"
+                      " changement d’usage) et de la fiscalité locative place"
+                      " aujourd’hui de nombreux propriétaires devant un choix"
+                      " stratégique.\n\nPlutôt que de subir une immobilisation"
+                      " locative ou des travaux énergétiques lourds à la rentabilité"
+                      " incertaine, une cession optimisée sur le marché actuel du"
+                      " Carré d’Or permet de cristalliser votre plus-value nette"
+                      " auprès d’acquéreurs patrimoniaux ciblés."
+                  )
+              elif choix_effectif.startswith("2."):
+                  objet_courrier = (
+                      "Évolution énergétique de votre copropriété et étude"
+                      f" d’arbitrage — {adresse.title()} ({str_reperage})"
+                  )
+                  paragraphe_strategique = (
+                      f"Nous observons actuellement une forte activité diagnostique"
+                      f" au sein de votre immeuble ({nb_dpe_imm} diagnostics"
+                      " enregistrés récemment), signe fréquent d’une réflexion"
+                      " collective sur la rénovation énergétique, le ravalement ou la"
+                      " mise en conformité des lots.\n\nDans les immeubles bourgeois"
+                      " niçois, le vote d’appels de fonds importants en Assemblée"
+                      " Générale pèse directement sur le rendement net des"
+                      " copropriétaires. Étudier la valorisation de votre lot en"
+                      " amont de ces échéances vous permet d’arbitrer sereinement et"
+                      " de préserver votre capital."
+                  )
+              elif choix_effectif.startswith("3."):
+                  objet_courrier = (
+                      "Pression fiscale (THRS / DPE) et valorisation de votre actif"
+                      f" au {adresse.title()} ({str_reperage})"
+                  )
+                  paragraphe_strategique = (
+                      "La détention d’un actif immobilier dans le cœur de Nice fait"
+                      " face aujourd’hui à une double pression : les contraintes du"
+                      " calendrier énergétique (classes F et G) et la majoration"
+                      " maximale de la Taxe d’Habitation sur les Résidences"
+                      " Secondaires et logements peu occupés.\n\nAfin d’éviter que"
+                      " ces charges et obligations de travaux n’érodent votre"
+                      " patrimoine, notre Cabinet réalise pour vous une simulation"
+                      " complète comparant le coût de conservation (travaux, fiscalité)"
+                      " au capital net que vous dégageriez immédiatement en cas de"
+                      " cession."
+                  )
+              else:
+                  objet_courrier = (
+                      "Optimisation patrimoniale et opportunité d’arbitrage pour"
+                      f" votre actif au {adresse.title()} ({str_reperage})"
+                  )
+                  paragraphe_strategique = (
+                      "Dans le cadre d’une gestion dynamique de votre patrimoine"
+                      " immobilier et au regard des conditions de marché actuelles"
+                      " sur les secteurs les plus recherchés de Nice (notamment après"
+                      " un cycle de détention d’environ 5 ans), l’étude d’un"
+                      " arbitrage ou d’une valorisation optimale de votre actif"
+                      " représente une opportunité stratégique pour sécuriser vos"
+                      " plus-values et réallouer vos capitaux."
+                  )
 
-          courrier_modele = (
-              f"Nice, le {date_jour}\n\n"
-              f"{destinataire_affichage}\n"
-              f"Adresse du bien : {adresse.title()}\n\n"
-              f"{appel_destinataire}\n\n"
-              f"Objet : {objet_courrier}\n\n"
-              "En qualité de Conseil en Immobilier Patrimonial et forte d'une expertise pointue en droit de l'urbanisme, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.\n\n"
-              f"{paragraphe_strategique}\n\n"
-              "Je me tiens à votre entière disposition pour réaliser un audit patrimonial confidentiel (incluant le chiffrage précis de votre plus-value nette et des potentiels de votre lot) et vous accompagner dans vos réflexions.\n\n"
-              "Bien cordialement,\n\n"
-              "Nathalie Parra\n"
-              "Conseil en Immobilier Patrimonial\n\n"
-              "CABINET PRIVÉ IMMOBILIER HONORAT\n"
-              "TRANSACTION . CONSEIL . PATRIMOINE"
-          )
+              destinataire_affichage = (
+                  f"Destinataire : {destinataire_nom}\nLocalisation du"
+                  f" lot : {str_reperage}"
+              )
 
-          st.text_area(
-              nom_champ_courrier,
-              value=courrier_modele,
-              height=340,
-              key=f"courrier_{adresse}",
-          )
-          logo_path = "Cabinet Immobilier Privé HONORAT.png"
-          if os.path.exists(logo_path):
-            st.image(logo_path, width=200)
+              nom_champ_courrier = f"📄 Courrier - {adresse.title()}"
+
+              courrier_modele = (
+                  f"Nice, le {date_jour}\n\n"
+                  f"{destinataire_affichage}\n"
+                  f"Adresse du bien : {adresse.title()}\n\n"
+                  f"{appel_destinataire}\n\n"
+                  f"Objet : {objet_courrier}\n\n"
+                  "En qualité de Conseil en Immobilier Patrimonial et forte d'une expertise pointue en droit de l'urbanisme, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.\n\n"
+                  f"{paragraphe_strategique}\n\n"
+                  "Je me tiens à votre entière disposition pour réaliser un audit patrimonial confidentiel (incluant le chiffrage précis de votre plus-value nette et des potentiels de votre lot) et vous accompagner dans vos réflexions.\n\n"
+                  "Bien cordialement,\n\n"
+                  "Nathalie Parra\n"
+                  "Conseil en Immobilier Patrimonial\n\n"
+                  "CABINET PRIVÉ IMMOBILIER HONORAT\n"
+                  "TRANSACTION . CONSEIL . PATRIMOINE"
+              )
+
+              st.text_area(
+                  nom_champ_courrier,
+                  value=courrier_modele,
+                  height=340,
+                  key=f"courrier_{adresse}",
+              )
+              logo_path = "Cabinet Immobilier Privé HONORAT.png"
+              if os.path.exists(logo_path):
+                  st.image(logo_path, width=200)
       else:
-        st.info(
-            'ℹ️ Veuillez sélectionner au moins une adresse dans le menu'
-            ' ci-dessus pour afficher les courriers.'
-        )
-
+          st.info("ℹ️ Veuillez sélectionner au moins une adresse dans le menu ci-dessus pour afficher les courriers.")
   with tab4:
     st.subheader('💶 Base de données des Ventes (DVF) & Carte Interactive')
     if not df_dvf.empty:
