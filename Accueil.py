@@ -695,11 +695,19 @@ if st.session_state.analyse_terminee:
 
   with tab2:
     st.subheader(
-        '🔍 Filtre rapide : Biens en Impasse Saisonnière ou Cycle ~5 ans'
+        "🔍 Filtre rapide : Biens en Impasse Saisonnière ou Cycle ~5 ans"
     )
-    if 'Profil & Stratégie' in st.session_state.df_affichage.columns:
+    if "Profil & Stratégie" in st.session_state.df_affichage.columns:
       df_cycle = st.session_state.df_affichage[
-          st.session_state.df_affichage['Profil & Stratégie'].str.contains(
-              'Cycle ~5 ans', na=False
+          st.session_state.df_affichage["Profil & Stratégie"].str.contains(
+              "Cycle ~5 ans", na=False
           )
-          | st.session_state.
+          | st.session_state.df_affichage[
+              "Signaux Data (Airbnb / Copro / THRS)"
+          ].str.contains("Impasse Airbnb", na=False)
+      ]
+      if not df_cycle.empty:
+        st.dataframe(df_cycle, use_container_width=True, hide_index=True)
+      else:
+        st.info("ℹ️ Aucun bien correspondant dans ce lot.")
+        
