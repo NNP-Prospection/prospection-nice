@@ -526,20 +526,19 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
       )
 
       for index, row in df_affichage.iterrows():
-        d = row.get('Date DPE', '')
-        note = str(row.get('Note DPE', '')).strip().upper()
-        adresse_str = str(row.get('Adresse Exacte', '')).lower()
-        val_imm = row.get('DPE Immeuble', 1)
-nb_dpe_imm = int(val_imm) if pd.notna(val_imm) and str(val_imm).isdigit() else 1
+            d = row.get('Date DPE', '')
+            note = str(row.get('Note DPE', '')).strip().upper()
+            adresse_str = str(row.get('Adresse Exacte', '')).lower()
+            val_imm = row.get('DPE Immeuble', 1)
+            nb_dpe_imm = int(val_imm) if pd.notna(val_imm) and str(val_imm).isdigit() else 1
+            surf_val = pd.to_numeric(row.get('Surface m²', None), errors='coerce')
+            est_petite_surface = (pd.isna(surf_val)) or (surf_val <= 50)
+            est_zone_tendue_airbnb = any(
+                k in adresse_str for k in mots_cles_zone3_airbnb
+            )
 
-        surf_val = pd.to_numeric(row.get('Surface m²', None), errors='coerce')
-        est_petite_surface = (pd.isna(surf_val)) or (surf_val <= 50)
-        est_zone_tendue_airbnb = any(
-            k in adresse_str for k in mots_cles_zone3_airbnb
-        )
-
-        signaux = []
-        if note in ['F', 'G'] and est_zone_tendue_airbnb and est_petite_surface:
+            signaux = []
+            if note in ['F', 'G'] and est_zone_tendue_airbnb and est_petite_surface:
           signaux.append('🚫 Impasse Airbnb (Zone 3)')
         if nb_dpe_imm >= 3:
           signaux.append(f'🏗️ Copro active ({nb_dpe_imm} DPE)')
