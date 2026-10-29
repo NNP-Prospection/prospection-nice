@@ -529,7 +529,8 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
         d = row.get('Date DPE', '')
         note = str(row.get('Note DPE', '')).strip().upper()
         adresse_str = str(row.get('Adresse Exacte', '')).lower()
-        nb_dpe_imm = int(row.get('DPE Immeuble', 1))
+        val_imm = row.get('DPE Immeuble', 1)
+nb_dpe_imm = int(val_imm) if pd.notna(val_imm) and str(val_imm).isdigit() else 1
 
         surf_val = pd.to_numeric(row.get('Surface m²', None), errors='coerce')
         est_petite_surface = (pd.isna(surf_val)) or (surf_val <= 50)
