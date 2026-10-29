@@ -153,18 +153,27 @@ def enrichir_avec_sirene(adresse_str):
     return None
 
 
-# --- CHARGEMENT DPE, RNIC (COPROS) & DVF ---
+# --- CHARGEMENT DPE & RNIC SÉCURISÉ (MÉMOIRE OPTIMISÉE) ---
 @st.cache_data
 def load_dpe():
     try:
         fichiers = sorted(glob.glob('dpe_nice_part_*.csv'))
+        fichier_test = fichiers[0] if fichiers else 'dpe_nice_complet.csv'
+        
+        if os.path.exists(fichier_test):
+            sample = pd.read_csv(fichier_test, nrows=0, low_memory=False)
+            mots_cles = ['adresse', 'ban', 'brute', 'propriete', 'etage', 'niveau', 'appartement', 'porte', 'numero', 'lot', 'batiment', 'bat', 'surface', 'annee', 'periode', 'etiquette', 'dpe', 'date']
+            cols_utiles = [c for c in sample.columns if any(m in c.lower() for m in mots_cles)]
+        else:
+            return pd.DataFrame()
+
         if fichiers:
             df_total = pd.concat(
-                [pd.read_csv(f, low_memory=False) for f in fichiers],
+                [pd.read_csv(f, usecols=cols_utiles, low_memory=True) for f in fichiers],
                 ignore_index=True,
             )
             return df_total
-        return pd.read_csv('dpe_nice_complet.csv', low_memory=False)
+        return pd.read_csv('dpe_nice_complet.csv', usecols=cols_utiles, low_memory=True)
     except Exception as e:
         st.sidebar.error(f'Erreur chargement DPE : {e}')
         return pd.DataFrame()
@@ -224,17 +233,12 @@ def load_dvf():
         for f in fichiers:
             try:
                 sample = pd.read_csv(f, sep=';', nrows=0)
-                if len(sample.columns) < 3:
-                    sample = pd.read_csv(f, sep=',', nrows=0)
-                    sep = ','
-                else:
-                    sep = ';'
-
+                sep = ',' if len(sample.columns) < 3 else ';'
                 cols_a_charger = [c for c in colonnes_utiles if c in sample.columns]
 
                 if cols_a_charger:
                     df_temp = pd.read_csv(
-                        f, sep=sep, usecols=cols_a_charger, low_memory=False
+                        f, sep=sep, usecols=cols_a_charger, low_memory=True
                     )
                     liste_df.append(df_temp)
             except Exception:
@@ -272,9 +276,9 @@ def load_dvf():
         return pd.DataFrame()
 
 
+# Chargement allégé au démarrage (DVF exclus)
 df_global = load_dpe()
 df_rnic = load_rnic()
-df_dvf = load_dvf()
 
 # --- BARRE LATÉRALE DE RECHERCHE ---
 st.sidebar.header('🎯 Critères de ciblage')
@@ -383,7 +387,6 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
             )
 
         if 'Adresse Exacte' in df_affichage.columns:
-            # SÉCURITÉ GÉOGRAPHIQUE : On exclut tout ce qui n'est pas à Nice ou dans le 06
             df_affichage = df_affichage[
                 df_affichage['Adresse Exacte']
                 .astype(str)
@@ -512,7 +515,6 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
         if secteur != 'Tous les secteurs':
             mots_cles = rues_quartiers.get(secteur, [])
             if 'Adresse Exacte' in df_affichage.columns and mots_cles:
-                # SÉCURITÉ MOTS ENTIERS (\b) : 'port' ne matchera plus 'portes'
                 pattern = '|'.join([fr'\b{re.escape(mot)}\b' for mot in mots_cles])
                 df_affichage = df_affichage[
                     df_affichage['Adresse Exacte']
@@ -543,7 +545,6 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
                 surf_val = pd.to_numeric(row.get('Surface m²', None), errors='coerce')
                 est_petite_surface = (pd.isna(surf_val)) or (surf_val <= 50)
                 
-                # SÉCURITÉ MOTS ENTIERS (\b) pour la boucle
                 est_zone_tendue_airbnb = any(
                     re.search(fr'\b{re.escape(k)}\b', adresse_str) for k in mots_cles_zone3_airbnb
                 )
@@ -954,130 +955,135 @@ if st.session_state.analyse_terminee and not st.session_state.df_affichage.empty
 
     with tab4:
         st.subheader('💶 Base de données des Ventes (DVF) & Carte Interactive')
-        if not df_dvf.empty:
+        
+        # CHARGEMENT À LA DEMANDE (Bouton d'activation)
+        if st.button("🗺️ Charger et afficher la carte des transactions foncières"):
+            with st.spinner("Chargement des données DVF en cours..."):
+                df_dvf = load_dvf()
+                
+            if not df_dvf.empty:
+                def construire_adresse(row):
+                    cols = row.index.tolist()
+                    num = ''
+                    voie = ''
+                    if 'adresse_numero' in cols and pd.notna(row['adresse_numero']):
+                        num = str(row['adresse_numero']).replace('.0', '')
+                    elif 'No voie' in cols and pd.notna(row['No voie']):
+                        num = str(row['No voie']).replace('.0', '')
+                    if 'adresse_nom_voie' in cols and pd.notna(row['adresse_nom_voie']):
+                        voie = str(row['adresse_nom_voie'])
+                    elif 'Voie' in cols and pd.notna(row['Voie']):
+                        voie = str(row['Voie'])
+                        if 'Type de voie' in cols and pd.notna(row['Type de voie']):
+                            voie = str(row['Type de voie']) + ' ' + voie
 
-            def construire_adresse(row):
-                cols = row.index.tolist()
-                num = ''
-                voie = ''
-                if 'adresse_numero' in cols and pd.notna(row['adresse_numero']):
-                    num = str(row['adresse_numero']).replace('.0', '')
-                elif 'No voie' in cols and pd.notna(row['No voie']):
-                    num = str(row['No voie']).replace('.0', '')
-                if 'adresse_nom_voie' in cols and pd.notna(row['adresse_nom_voie']):
-                    voie = str(row['adresse_nom_voie'])
-                elif 'Voie' in cols and pd.notna(row['Voie']):
-                    voie = str(row['Voie'])
-                    if 'Type de voie' in cols and pd.notna(row['Type de voie']):
-                        voie = str(row['Type de voie']) + ' ' + voie
+                    adresse = f'{num} {voie}'.strip().title()
+                    return adresse if adresse else 'Adresse inconnue'
 
-                adresse = f'{num} {voie}'.strip().title()
-                return adresse if adresse else 'Adresse inconnue'
+                df_dvf['Adresse Vente'] = df_dvf.apply(construire_adresse, axis=1)
 
-            df_dvf['Adresse Vente'] = df_dvf.apply(construire_adresse, axis=1)
-
-            colonnes_dvf = [
-                'date_mutation',
-                'Adresse Vente',
-                'type_local',
-                'nom_commune',
-                'valeur_fonciere',
-                'surface_reelle_bati',
-                'prix_m2',
-                'lat',
-                'lon',
-            ]
-            colonnes_presentes = [
-                col for col in colonnes_dvf if col in df_dvf.columns
-            ]
-
-            if colonnes_presentes:
-                df_dvf_propre = df_dvf[colonnes_presentes].copy()
-
-                df_dvf_propre['Prix de Vente'] = df_dvf_propre[
-                    'valeur_fonciere'
-                ].apply(
-                    lambda x: f'{x:,.0f} €'.replace(',', ' ') if pd.notna(x) else ''
-                )
-                df_dvf_propre['Surface'] = df_dvf_propre['surface_reelle_bati'].apply(
-                    lambda x: f'{x:,.0f} m²' if pd.notna(x) else ''
-                )
-                df_dvf_propre['Prix / m²'] = df_dvf_propre['prix_m2'].apply(
-                    lambda x: f'{x:,.0f} €/m²'.replace(',', ' ') if pd.notna(x) else ''
-                )
-
-                st.markdown(
-                    '### 📍 Cartographie des transactions (Passez la souris sur les'
-                    ' points)'
-                )
-                if 'lat' in df_dvf_propre.columns and 'lon' in df_dvf_propre.columns:
-                    df_map = df_dvf_propre.dropna(subset=['lat', 'lon']).copy()
-
-                    if not df_map.empty:
-                        view_state = pdk.ViewState(
-                            latitude=df_map['lat'].mean(),
-                            longitude=df_map['lon'].mean(),
-                            zoom=13,
-                            pitch=0,
-                        )
-
-                        layer = pdk.Layer(
-                            'ScatterplotLayer',
-                            data=df_map,
-                            get_position='[lon, lat]',
-                            get_radius=20,
-                            get_fill_color='[200, 30, 0, 160]',
-                            pickable=True,
-                            auto_highlight=True,
-                        )
-
-                        tooltip = {
-                            'html': (
-                                '<b>{Adresse Vente}</b><br/>Date : {date_mutation}<br/>Prix'
-                                ' : {Prix de Vente}<br/>Surface : {Surface}<br/><b>Ratio :'
-                                ' {Prix / m²}</b>'
-                            ),
-                            'style': {
-                                'backgroundColor': 'steelblue',
-                                'color': 'white',
-                                'font-family': 'sans-serif',
-                            },
-                        }
-
-                        st.pydeck_chart(
-                            pdk.Deck(
-                                layers=[layer],
-                                initial_view_state=view_state,
-                                tooltip=tooltip,
-                            )
-                        )
-                    else:
-                        st.info('Aucune coordonnée GPS trouvée pour afficher la carte.')
-
-                st.markdown('---')
-                st.markdown('### 📋 Tableau de bord DVF')
-                df_tableau = df_dvf_propre[[
+                colonnes_dvf = [
                     'date_mutation',
                     'Adresse Vente',
                     'type_local',
                     'nom_commune',
-                    'Prix de Vente',
-                    'Surface',
-                    'Prix / m²',
-                ]].rename(
-                    columns={
-                        'date_mutation': 'Date Acte',
-                        'Adresse Vente': 'Adresse',
-                        'type_local': 'Type de Bien',
-                        'nom_commune': 'Commune',
-                    }
-                )
+                    'valeur_fonciere',
+                    'surface_reelle_bati',
+                    'prix_m2',
+                    'lat',
+                    'lon',
+                ]
+                colonnes_presentes = [
+                    col for col in colonnes_dvf if col in df_dvf.columns
+                ]
 
-                st.dataframe(
-                    df_tableau.head(200), use_container_width=True, hide_index=True
+                if colonnes_presentes:
+                    df_dvf_propre = df_dvf[colonnes_presentes].copy()
+
+                    df_dvf_propre['Prix de Vente'] = df_dvf_propre[
+                        'valeur_fonciere'
+                    ].apply(
+                        lambda x: f'{x:,.0f} €'.replace(',', ' ') if pd.notna(x) else ''
+                    )
+                    df_dvf_propre['Surface'] = df_dvf_propre['surface_reelle_bati'].apply(
+                        lambda x: f'{x:,.0f} m²' if pd.notna(x) else ''
+                    )
+                    df_dvf_propre['Prix / m²'] = df_dvf_propre['prix_m2'].apply(
+                        lambda x: f'{x:,.0f} €/m²'.replace(',', ' ') if pd.notna(x) else ''
+                    )
+
+                    st.markdown(
+                        '### 📍 Cartographie des transactions (Passez la souris sur les'
+                        ' points)'
+                    )
+                    if 'lat' in df_dvf_propre.columns and 'lon' in df_dvf_propre.columns:
+                        df_map = df_dvf_propre.dropna(subset=['lat', 'lon']).copy()
+
+                        if not df_map.empty:
+                            view_state = pdk.ViewState(
+                                latitude=df_map['lat'].mean(),
+                                longitude=df_map['lon'].mean(),
+                                zoom=13,
+                                pitch=0,
+                            )
+
+                            layer = pdk.Layer(
+                                'ScatterplotLayer',
+                                data=df_map,
+                                get_position='[lon, lat]',
+                                get_radius=20,
+                                get_fill_color='[200, 30, 0, 160]',
+                                pickable=True,
+                                auto_highlight=True,
+                            )
+
+                            tooltip = {
+                                'html': (
+                                    '<b>{Adresse Vente}</b><br/>Date : {date_mutation}<br/>Prix'
+                                    ' : {Prix de Vente}<br/>Surface : {Surface}<br/><b>Ratio :'
+                                    ' {Prix / m²}</b>'
+                                ),
+                                'style': {
+                                    'backgroundColor': 'steelblue',
+                                    'color': 'white',
+                                    'font-family': 'sans-serif',
+                                },
+                            }
+
+                            st.pydeck_chart(
+                                pdk.Deck(
+                                    layers=[layer],
+                                    initial_view_state=view_state,
+                                    tooltip=tooltip,
+                                )
+                            )
+                        else:
+                            st.info('Aucune coordonnée GPS trouvée pour afficher la carte.')
+
+                    st.markdown('---')
+                    st.markdown('### 📋 Tableau de bord DVF')
+                    df_tableau = df_dvf_propre[[
+                        'date_mutation',
+                        'Adresse Vente',
+                        'type_local',
+                        'nom_commune',
+                        'Prix de Vente',
+                        'Surface',
+                        'Prix / m²',
+                    ]].rename(
+                        columns={
+                            'date_mutation': 'Date Acte',
+                            'Adresse Vente': 'Adresse',
+                            'type_local': 'Type de Bien',
+                            'nom_commune': 'Commune',
+                        }
+                    )
+
+                    st.dataframe(
+                        df_tableau.head(200), use_container_width=True, hide_index=True
+                    )
+            else:
+                st.warning(
+                    '⚠️ Les données DVF n’ont pas pu être chargées. Vérifiez le nom du'
+                    ' dossier et vos fichiers.'
                 )
-        else:
-            st.warning(
-                '⚠️ Les données DVF n’ont pas pu être chargées. Vérifiez le nom du'
-                ' dossier et vos fichiers.'
-            )
