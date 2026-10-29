@@ -5,6 +5,7 @@ import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
+import re
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -382,6 +383,13 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
             )
 
         if 'Adresse Exacte' in df_affichage.columns:
+            # SÉCURITÉ GÉOGRAPHIQUE : On exclut tout ce qui n'est pas à Nice ou dans le 06
+            df_affichage = df_affichage[
+                df_affichage['Adresse Exacte']
+                .astype(str)
+                .str.lower()
+                .str.contains(r'nice|06\d{3}', regex=True, na=False)
+            ]
             comptage_immeuble = (
                 df_affichage['Adresse Exacte'].value_counts().to_dict()
             )
@@ -504,7 +512,8 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
         if secteur != 'Tous les secteurs':
             mots_cles = rues_quartiers.get(secteur, [])
             if 'Adresse Exacte' in df_affichage.columns and mots_cles:
-                pattern = '|'.join(mots_cles)
+                # SÉCURITÉ MOTS ENTIERS (\b) : 'port' ne matchera plus 'portes'
+                pattern = '|'.join([fr'\b{re.escape(mot)}\b' for mot in mots_cles])
                 df_affichage = df_affichage[
                     df_affichage['Adresse Exacte']
                     .astype(str)
@@ -533,8 +542,10 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
                 nb_dpe_imm = int(val_imm) if pd.notna(val_imm) and str(val_imm).isdigit() else 1
                 surf_val = pd.to_numeric(row.get('Surface m²', None), errors='coerce')
                 est_petite_surface = (pd.isna(surf_val)) or (surf_val <= 50)
+                
+                # SÉCURITÉ MOTS ENTIERS (\b) pour la boucle
                 est_zone_tendue_airbnb = any(
-                    k in adresse_str for k in mots_cles_zone3_airbnb
+                    re.search(fr'\b{re.escape(k)}\b', adresse_str) for k in mots_cles_zone3_airbnb
                 )
 
                 signaux = []
@@ -543,9 +554,8 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
                 if nb_dpe_imm >= 3:
                     signaux.append(f'🏗️ Copro active ({nb_dpe_imm} DPE)')
                 if any(
-                    k in adresse_str
-                    for k in rues_quartiers["Carré d'Or"]
-                    + rues_quartiers['Promenade des Anglais']
+                    re.search(fr'\b{re.escape(k)}\b', adresse_str)
+                    for k in rues_quartiers["Carré d'Or"] + rues_quartiers['Promenade des Anglais']
                 ):
                     signaux.append('🏛️ Cible THRS / Vacant')
 
@@ -554,7 +564,7 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
                 )
 
                 est_secteur_cle = any(
-                    k in adresse_str
+                    re.search(fr'\b{re.escape(k)}\b', adresse_str)
                     for k in [
                         'promenade des anglais',
                         'mont boron',
