@@ -632,8 +632,11 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
         ]
         st.session_state.analyse_terminee = True
 
-# --- AFFICHAGE ---
-if st.session_state.analyse_terminee:
+# --- AFFICHAGE SÉCURISÉ ---
+if st.session_state.analyse_terminee and st.session_state.df_affichage.empty:
+    st.warning("⚠️ Aucun mandat potentiel ne correspond à ces critères précis. Veuillez modifier le secteur (ex: Tous les secteurs) ou élargir votre cible.")
+
+if st.session_state.analyse_terminee and not st.session_state.df_affichage.empty:
     tab1, tab2, tab3, tab4 = st.tabs([
         '📊 1. Listing & Signaux Croisés',
         '🏖️ 2. Focus Saisonnier & Cycle ~5 ans',
