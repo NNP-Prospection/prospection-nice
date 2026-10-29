@@ -553,39 +553,38 @@ for index, row in df_affichage.iterrows():
                 ' | '.join(signaux) if signaux else 'Standard'
             )
 
-        est_secteur_cle = any(
-            k in adresse_str
-            for k in [
-                'promenade des anglais',
-                'mont boron',
-                'quai',
-                'france',
-                'massena',
-                'paradis',
-                'buffa',
-                'victor hugo',
-            ]
-        )
+            est_secteur_cle = any(
+                k in adresse_str
+                for k in [
+                    'promenade des anglais',
+                    'mont boron',
+                    'quai',
+                    'france',
+                    'massena',
+                    'paradis',
+                    'buffa',
+                    'victor hugo',
+                ]
+            )
 
-        try:
-          dt_dpe = pd.to_datetime(d)
-          diff_annees = date_actuelle.year - dt_dpe.year
-          est_cycle_5ans = 4 <= diff_annees <= 6 or est_secteur_cle
+            try:
+                dt_dpe = pd.to_datetime(d)
+                diff_annees = date_actuelle.year - dt_dpe.year
+                est_cycle_5ans = 4 <= diff_annees <= 6 or est_secteur_cle
 
-          if note in ['F', 'G']:
-            if est_cycle_5ans:
-              statuts_mandats.append(f'🏖️ Cycle ~5 ans (Passoire {note})')
-            else:
-              statuts_mandats.append(f'⏳ Passoire {note} Standard')
-          else:
-            note_aff = note if note and note in 'ABCDE' else 'A-E'
-            if est_cycle_5ans:
-              statuts_mandats.append(f'📈 Cycle ~5 ans (Classe {note_aff})')
-            else:
-              statuts_mandats.append(f'🏷️ Standard (Classe {note_aff})')
-        except Exception:
-          statuts_mandats.append('📅 À qualifier')
-
+                if note in ['F', 'G']:
+                    if est_cycle_5ans:
+                        statuts_mandats.append(f'🏖️ Cycle ~5 ans (Passoire {note})')
+                    else:
+                        statuts_mandats.append(f'⏳ Passoire {note} Standard')
+                else:
+                    note_aff = note if note and note in 'ABCDE' else 'A-E'
+                    if est_cycle_5ans:
+                        statuts_mandats.append(f'📈 Cycle ~5 ans (Classe {note_aff})')
+                    else:
+                        statuts_mandats.append(f'🏷️ Standard (Classe {note_aff})')
+            except Exception:
+                statuts_mandats.append('📅 À qualifier')
       df_affichage['Profil & Stratégie'] = statuts_mandats
       df_affichage['Signaux Data (Airbnb / Copro / THRS)'] = (
           alertes_saisonnier_copro
