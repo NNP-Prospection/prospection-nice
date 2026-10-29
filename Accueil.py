@@ -525,7 +525,7 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
           + rues_quartiers['Musiciens / Gambetta']
       )
 
-      for index, row in df_affichage.iterrows():
+for index, row in df_affichage.iterrows():
             d = row.get('Date DPE', '')
             note = str(row.get('Note DPE', '')).strip().upper()
             adresse_str = str(row.get('Adresse Exacte', '')).lower()
@@ -539,19 +539,19 @@ if st.sidebar.button('Générer le listing certifié', type='primary'):
 
             signaux = []
             if note in ['F', 'G'] and est_zone_tendue_airbnb and est_petite_surface:
-          signaux.append('🚫 Impasse Airbnb (Zone 3)')
-        if nb_dpe_imm >= 3:
-          signaux.append(f'🏗️ Copro active ({nb_dpe_imm} DPE)')
-        if any(
-            k in adresse_str
-            for k in rues_quartiers["Carré d'Or"]
-            + rues_quartiers['Promenade des Anglais']
-        ):
-          signaux.append('🏛️ Cible THRS / Vacant')
+                signaux.append('🚫 Impasse Airbnb (Zone 3)')
+            if nb_dpe_imm >= 3:
+                signaux.append(f'🏗️ Copro active ({nb_dpe_imm} DPE)')
+            if any(
+                k in adresse_str
+                for k in rues_quartiers["Carré d'Or"]
+                + rues_quartiers['Promenade des Anglais']
+            ):
+                signaux.append('🏛️ Cible THRS / Vacant')
 
-        alertes_saisonnier_copro.append(
-            ' | '.join(signaux) if signaux else 'Standard'
-        )
+            alertes_saisonnier_copro.append(
+                ' | '.join(signaux) if signaux else 'Standard'
+            )
 
         est_secteur_cle = any(
             k in adresse_str
