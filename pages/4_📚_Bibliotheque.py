@@ -25,29 +25,31 @@ with tab1:
     
     date_jour = datetime.now().strftime("%d/%m/%Y")
     signature = (
-        "Nathalie Parra\n"
-        "Conseil en Immobilier Patrimonial\n\n"
+        "Nathalie Parra\n\n"
         "CABINET PRIVÉ IMMOBILIER HONORAT\n"
-        "TRANSACTION . CONSEIL . PATRIMOINE"
+        "AUDIT . TRANSACTION . CONSEIL\n\n"
+        "---\n"
+        "*Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur*\n"
+        "*Membre de la FNAIM*"
     )
 
     with st.expander("1. Stratégie DPE & Impasse Airbnb (Zone 3 Nice)"):
         lettre_airbnb = f"""Nice, le {date_jour}
 
-Objet : Réglementation des meublés de tourisme à Nice, DPE et arbitrage patrimonial
+Objet : Réglementation des meublés de tourisme à Nice, DPE et arbitrage
 
 Madame, Monsieur,
 
 Le durcissement simultané de la réglementation métropolitaine niçoise sur les meublés de tourisme (quotas stricts en Zone 3 hypercentre et obligation de justifier d’un DPE classé entre A et E) et de la fiscalité locative place aujourd’hui de nombreux propriétaires devant un choix stratégique.
 
-Plutôt que de subir une immobilisation locative ou des travaux énergétiques lourds à la rentabilité incertaine, une cession optimisée sur le marché actuel du Carré d’Or permet de cristalliser votre plus-value nette auprès d’acquéreurs patrimoniaux ciblés.
+Plutôt que de subir une immobilisation locative ou des travaux énergétiques lourds à la rentabilité incertaine, une cession optimisée sur le marché actuel du Carré d’Or permet de cristalliser votre plus-value nette auprès d’acquéreurs ciblés.
 
-Je me tiens à votre disposition pour réaliser un audit patrimonial confidentiel.
+Je me tiens à votre disposition pour réaliser un audit confidentiel.
 
 Bien cordialement,
 
 {signature}"""
-        st.text_area("Aperçu :", value=lettre_airbnb, height=300, key="txt_airbnb")
+        st.text_area("Aperçu :", value=lettre_airbnb, height=320, key="txt_airbnb")
         st.download_button("📥 Télécharger (TXT)", data=lettre_airbnb, file_name="Modele_1_Airbnb_DPE.txt")
 
     with st.expander("2. Stratégie Bailleurs & Appels de Fonds (RNIC)"):
@@ -66,7 +68,7 @@ Je me tiens à votre entière disposition pour un audit confidentiel de votre lo
 Bien cordialement,
 
 {signature}"""
-        st.text_area("Aperçu :", value=lettre_rnic, height=300, key="txt_rnic")
+        st.text_area("Aperçu :", value=lettre_rnic, height=320, key="txt_rnic")
         st.download_button("📥 Télécharger (TXT)", data=lettre_rnic, file_name="Modele_2_Bailleurs_RNIC.txt")
 
     with st.expander("3. Stratégie SCI & Arbitrage Retraite (Exonération PV)"):
@@ -80,33 +82,33 @@ Madame, Monsieur le Gérant,
 
 Après plusieurs années de détention, votre actif bénéficie désormais d'un abattement significatif sur la plus-value immobilière. 
 
-À l'approche de la retraite ou dans une optique de transmission, la gestion locative devient souvent chronophage et la rentabilité nette s'érode. C'est le moment idéal pour envisager de cristalliser cette plus-value exonérée et de restructurer votre patrimoine.
+À l'approche de la retraite ou dans une optique de transmission, la gestion locative devient souvent chronophage et la rentabilité nette s'érode. C'est le moment idéal pour envisager de cristalliser cette plus-value exonérée et de restructurer vos actifs.
 
-Je me tiens à votre disposition pour chiffrer la valeur vénale actuelle de votre actif ainsi que la plus-value nette d'impôt en cas de cession.
+Je me tiens à votre disposition pour chiffrer la valeur vénale actuelle de votre bien ainsi que la plus-value nette d'impôt en cas de cession.
 
 Bien cordialement,
 
 {signature}"""
-        st.text_area("Aperçu :", value=lettre_sci, height=300, key="txt_sci")
+        st.text_area("Aperçu :", value=lettre_sci, height=320, key="txt_sci")
         st.download_button("📥 Télécharger (TXT)", data=lettre_sci, file_name="Modele_3_SCI_Retraite.txt")
 
     with st.expander("4. Stratégie Successions & Ayants Droit (INSEE/BODACC)"):
         lettre_succ = f"""Nice, le {date_jour}
 
-Objet : Accompagnement successoral et estimation de votre patrimoine
+Objet : Accompagnement successoral et estimation de votre bien
 
 Madame, Monsieur,
 
 Dans le cadre du règlement d'une succession ou d'une indivision, l'évaluation précise des actifs immobiliers est une étape déterminante, tant pour le notaire que pour la déclaration fiscale.
 
-Spécialisé dans l'accompagnement des ayants droit sur les biens de caractère à Nice, notre Cabinet Privé se tient à votre entière disposition pour réaliser un audit de valeur vénale objectif. Nous prenons en compte les dernières réglementations pour vous fournir un dossier d'estimation opposable à l'administration.
+Spécialisé dans l'accompagnement des ayants droit sur les biens de caractère à Nice, notre Cabinet se tient à votre entière disposition pour réaliser un audit de valeur vénale objectif. Nous prenons en compte les dernières réglementations pour vous fournir un dossier d'estimation complet.
 
 Démarche confidentielle et respectueuse des situations familiales garantie.
 
 Bien cordialement,
 
 {signature}"""
-        st.text_area("Aperçu :", value=lettre_succ, height=300, key="txt_succ")
+        st.text_area("Aperçu :", value=lettre_succ, height=320, key="txt_succ")
         st.download_button("📥 Télécharger (TXT)", data=lettre_succ, file_name="Modele_4_Successions.txt")
 
     with st.expander("5. Stratégie Droit des Sols & Valorisation (Sitadel2)"):
@@ -118,14 +120,14 @@ Madame, Monsieur,
 
 La modification d'un actif immobilier (division parcellaire, changement de destination, surélévation) est une excellente stratégie de création de valeur qui modifie le positionnement de votre bien sur le marché niçois.
 
-Forte d'une formation spécifique en instruction du droit des sols, je vous propose une étude de commercialisation sur-mesure pour votre projet. Cette évaluation prendra en compte la rareté de ces surfaces restructurées sur votre secteur et les attentes des investisseurs.
+Forte d'une parfaite connaissance des dynamiques locales, je vous propose une étude de commercialisation sur-mesure pour votre projet. Cette évaluation prendra en compte la rareté de ces surfaces restructurées sur votre secteur et les attentes des investisseurs.
 
 Je me tiens à votre disposition pour évaluer cette plus-value potentielle.
 
 Bien cordialement,
 
 {signature}"""
-        st.text_area("Aperçu :", value=lettre_urba, height=300, key="txt_urba")
+        st.text_area("Aperçu :", value=lettre_urba, height=320, key="txt_urba")
         st.download_button("📥 Télécharger (TXT)", data=lettre_urba, file_name="Modele_5_Urbanisme.txt")
 
 # --- TAB 2 : MÉMOS JURIDIQUES ---
@@ -159,10 +161,10 @@ with tab2:
             "- *Rappel :* Surtaxe applicable pour les plus-values nettes imposables supérieures à 50 000 €."
         )
         
-        st.markdown("#### 🏗️ Droit des Sols & ABF (Nice 06000)")
+        st.markdown("#### 🏗️ Urbanisme & Cadre Local (Nice 06000)")
         st.info(
             "- **Secteur Sauvegardé / SPR :** Hyper-centre, Vieux-Nice, Port.\n"
-            "- **Délais d'instruction majorés :** +1 mois pour consultation de l'Architecte des Bâtiments de France.\n"
+            "- **Délais d'instruction majorés :** +1 mois pour consultation des Architectes des Bâtiments de France.\n"
             "- **Changement de destination :** DP requise (sans modification façade) ou PC (si modification structures porteuses/façade)."
         )
 
