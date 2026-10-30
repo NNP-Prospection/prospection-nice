@@ -6,10 +6,10 @@ import pydeck as pdk
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Audit Patrimonial - Cabinet Honorat", page_icon="📝", layout="wide"
+    page_title="Audit & Avis de Valeur - Cabinet Honorat", page_icon="📝", layout="wide"
 )
 
-st.title("📝 Audit Patrimonial & Avis de Valeur")
+st.title("📝 Audit & Avis de Valeur")
 st.markdown(
     "Génération d'une synthèse financière et immobilière pour le client. "
     "Calcul de plus-value, analyse de l'environnement réglementaire et comparables de marché."
@@ -101,7 +101,7 @@ with st.form("form_audit_patrimonial"):
     with col_copro2:
         zone_airbnb = st.checkbox("Bien situé en Zone 3 (Hypercentre Nice - Quotas Airbnb stricts)", value=True)
         
-    submit_audit = st.form_submit_button("📊 Générer le Rapport d'Audit Patrimonial")
+    submit_audit = st.form_submit_button("📊 Générer le Rapport d'Audit & Avis de Valeur")
 
 # --- TRAITEMENT ET GÉNÉRATION DU RAPPORT ---
 if submit_audit:
@@ -124,7 +124,7 @@ if submit_audit:
         if os.path.exists(logo_path):
             st.image(logo_path, use_container_width=True)
     with col_titre:
-        st.markdown(f"## AUDIT PATRIMONIAL STRATÉGIQUE")
+        st.markdown(f"## RAPPORT D'AUDIT & AVIS DE VALEUR")
         st.markdown(f"**Dossier :** {nom_client if nom_client else 'Confidentiel'} | **Date :** {datetime.now().strftime('%d/%m/%Y')}")
         st.markdown(f"**Actif expertisé :** {type_bien} de {surface_bien} m² situé au {adresse_bien}")
 
@@ -181,10 +181,18 @@ if submit_audit:
     else:
         st.info(
             "L'actif présente des fondamentaux sains. Une mise en vente peut s'envisager dans d'excellentes conditions "
-            "pour réorienter votre stratégie patrimoniale, avec un positionnement prix optimisé pour les acquéreurs en résidence principale."
+            "pour réorienter votre stratégie, avec un positionnement prix optimisé pour les acquéreurs."
         )
         
-    st.markdown("<br><p style='text-align: right;'><em>Document généré par Nathalie Parra — Conseil en Immobilier Patrimonial</em></p>", unsafe_allow_html=True)
+    signature_cabinet = (
+        "<br><p style='text-align: right;'><em>Document généré par Nathalie Parra</em><br>"
+        "<strong>CABINET PRIVÉ IMMOBILIER HONORAT</strong><br>"
+        "AUDIT . TRANSACTION . CONSEIL<br><br>"
+        "---<br>"
+        "<em>Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur</em><br>"
+        "<em>Membre de la FNAIM</em></p>"
+    )
+    st.markdown(signature_cabinet, unsafe_allow_html=True)
 
 # --- MODULE INDÉPENDANT : COMPARABLES DE MARCHÉ DVF ---
 st.markdown("---")
