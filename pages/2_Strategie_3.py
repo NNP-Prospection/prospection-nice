@@ -53,7 +53,6 @@ def load_dpe_sci():
 
 @st.cache_data
 def load_base_sci():
-    # Cherche vos fichiers spécifiques SCI enrichis
     fichiers_sci = glob.glob('*sci*.csv') + glob.glob('*sirene*.csv')
     if fichiers_sci:
         try:
@@ -97,22 +96,19 @@ df_sci = load_base_sci()
 
 # --- MOTEUR DE CALCUL DES PLUS-VALUES IMMOBILIÈRES ---
 def calcul_abattement_plus_value(annees_detention):
-    # Règles fiscales françaises : Abattement pour durée de détention
     abattement_ir = 0
     abattement_ps = 0
     
     if annees_detention > 5:
-        # Calcul Impôt sur le Revenu (IR - 19%)
         if annees_detention <= 21:
             abattement_ir = (annees_detention - 5) * 6
         elif annees_detention >= 22:
             abattement_ir = 100
             
-        # Calcul Prélèvements Sociaux (PS - 17.2%)
         if annees_detention <= 21:
             abattement_ps = (annees_detention - 5) * 1.65
         elif annees_detention == 22:
-            abattement_ps = 28 # (16 * 1.65) + 1.6
+            abattement_ps = 28
         elif annees_detention > 22 and annees_detention < 30:
             abattement_ps = 28 + ((annees_detention - 22) * 9)
         elif annees_detention >= 30:
@@ -222,7 +218,6 @@ with tab1:
 
         df_affichage = df_dpe[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
 
-        # Filtre Nice
         if 'Adresse Exacte' in df_affichage.columns:
             df_affichage = df_affichage[
                 df_affichage['Adresse Exacte']
@@ -231,7 +226,6 @@ with tab1:
                 .str.contains(r'nice|06\d{3}', regex=True, na=False)
             ]
 
-        # Filtre Secteur Regex
         rues_quartiers = {
             "Carré d'Or": ['france', 'massena', 'paradis', 'suede', 'verdun', 'meyerbeer', 'congres', 'cronstadt', 'buffa', 'alphonse karr', 'maccarani', 'liberte', 'longchamp', 'grimaldi', 'dalpozzo', 'halevy', 'marechal joffre', 'rivoli'],
             'Promenade des Anglais': ['promenade des anglais', 'etats-unis', 'quai des etats-unis'],
@@ -304,7 +298,6 @@ with tab1:
 
                 date_jour = datetime.now().strftime("%d/%m/%Y")
                 
-                # Détermination de l'angle du courrier selon le filtre de l'âge
                 if "> 75 ans" in filtre_age_gerant:
                     objet_courrier = f"Stratégie de transmission, démembrement et optimisation de votre actif au {adresse_brute}"
                     paragraphe_cible = (
@@ -328,8 +321,8 @@ with tab1:
                     paragraphe_cible = (
                         "Le marché immobilier du secteur traverse une phase de normalisation. Pour les Sociétés Civiles Immobilières, "
                         "l'arbitrage d'actifs vieillissants ou fortement fiscalisés est aujourd'hui une priorité de gestion.\n\n"
-                        "Nous réalisons pour nos clients institutionnels et familiaux des audits précis de leurs portefeuilles "
-                        "afin d'identifier les actifs ayant atteint leur maturité fiscale et financière."
+                        "Nous réalisons pour nos clients des audits précis de leurs portefeuilles "
+                        "afin d'identifier les actifs ayant atteint leur maturité financière."
                     )
 
                 courrier_sci = f"""Nice, le {date_jour}
@@ -341,19 +334,22 @@ Madame, Monsieur le Gérant,
 
 Objet : {objet_courrier}
 
-En ma qualité de Conseil en Immobilier Patrimonial au sein du Cabinet Privé Immobilier Honorat, j'accompagne les dirigeants de sociétés civiles dans l'optimisation et la restructuration de leur parc immobilier niçois.
+En ma qualité de professionnel de l'immobilier au sein du Cabinet Privé Immobilier Honorat, j'accompagne les dirigeants de sociétés civiles dans l'optimisation et la restructuration de leur parc immobilier niçois.
 
 {paragraphe_cible}
 
-Je me tiens à votre entière disposition pour vous remettre, en toute confidentialité, un audit patrimonial de ce bien. Cette étude inclura un chiffrage de sa valeur vénale actuelle ainsi qu'une simulation précise de la plus-value nette d'impôt en cas de cession.
+Je me tiens à votre entière disposition pour vous remettre, en toute confidentialité, un audit de ce bien. Cette étude inclura un chiffrage de sa valeur vénale actuelle ainsi qu'une simulation précise de la plus-value nette d'impôt en cas de cession.
 
 Dans l'attente de nos échanges, je vous prie d'agréer, Madame, Monsieur le Gérant, l'expression de mes salutations distinguées.
 
 Nathalie Parra
-Conseil en Immobilier Patrimonial
 
 CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE"""
+AUDIT . TRANSACTION . CONSEIL
+
+---
+*Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur*
+*Membre de la FNAIM*"""
 
                 st.markdown("---")
                 st.text_area(
