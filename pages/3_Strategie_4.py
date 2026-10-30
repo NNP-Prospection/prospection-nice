@@ -50,7 +50,6 @@ def load_dpe_successions():
 
 @st.cache_data
 def load_insee_deces():
-    # Simulation du chargement du fichier mensuel des décès de l'INSEE
     fichiers_insee = glob.glob('*deces*.csv') + glob.glob('*insee*.csv')
     if fichiers_insee:
         try:
@@ -61,7 +60,6 @@ def load_insee_deces():
 
 @st.cache_data
 def load_bodacc_mutations():
-    # Simulation du chargement des annonces BODACC (liquidations, successions vacantes)
     fichiers_bodacc = glob.glob('*bodacc*.csv') + glob.glob('*mutation*.csv')
     if fichiers_bodacc:
         try:
@@ -140,7 +138,6 @@ with tab1:
 
         df_affichage = df_dpe[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
 
-        # Sécurité géographique : Nice et 06
         if 'Adresse Exacte' in df_affichage.columns:
             df_affichage = df_affichage[
                 df_affichage['Adresse Exacte']
@@ -149,7 +146,6 @@ with tab1:
                 .str.contains(r'nice|06\d{3}', regex=True, na=False)
             ]
 
-        # Sécurité mots entiers sur les quartiers
         rues_quartiers = {
             "Carré d'Or": ['france', 'massena', 'paradis', 'suede', 'verdun', 'meyerbeer', 'congres', 'cronstadt', 'buffa', 'alphonse karr', 'maccarani', 'liberte', 'longchamp', 'grimaldi', 'dalpozzo', 'halevy', 'marechal joffre', 'rivoli'],
             'Promenade des Anglais': ['promenade des anglais', 'etats-unis', 'quai des etats-unis'],
@@ -200,7 +196,6 @@ with tab1:
                 ligne_bien = df_affichage[df_affichage["Libellé Complet"] == bien_choisi].iloc[0]
                 adresse_brute = str(ligne_bien.get("Adresse Exacte", "")).title()
                 
-                # Simulation détection croisée
                 is_insee = not df_insee.empty and any(mot in adresse_brute.lower() for mot in ['france', 'massena'])
                 
                 if filtre_mutation.startswith("1.") or is_insee:
@@ -208,25 +203,24 @@ with tab1:
                 
                 date_jour = datetime.now().strftime("%d/%m/%Y")
                 
-                # Rédaction sur-mesure (Empathie & Expertise)
                 if filtre_mutation.startswith("1."):
-                    objet_courrier = f"Accompagnement successoral et estimation de votre patrimoine au {adresse_brute}"
+                    objet_courrier = f"Accompagnement successoral et estimation de votre bien au {adresse_brute}"
                     paragraphe_cible = (
                         "Dans le cadre complexe du règlement d'une succession, l'évaluation précise et documentée "
                         "des actifs immobiliers est une étape déterminante, tant pour le notaire en charge du dossier "
                         "que pour la déclaration fiscale de l'indivision.\n\n"
-                        "Spécialisé dans l'accompagnement des ayants droit sur les biens de caractère et patrimoniaux "
-                        "à Nice, notre Cabinet Privé se tient à votre entière disposition pour réaliser un audit de "
+                        "Spécialisé dans l'accompagnement des ayants droit sur les biens de caractère à Nice, "
+                        "notre Cabinet se tient à votre entière disposition pour réaliser un audit de "
                         "valeur vénale objectif de ce lot. Nous prenons en compte les dernières réglementations "
                         "énergétiques et les règles d'urbanisme locales pour vous fournir un dossier d'estimation "
-                        "opposable à l'administration fiscale."
+                        "complet."
                     )
                     destinataire = "Aux Ayants Droit / À l'Indivision"
                 elif filtre_mutation.startswith("2."):
-                    objet_courrier = f"Gestion de mutation patrimoniale et sécurisation de votre actif au {adresse_brute}"
+                    objet_courrier = f"Gestion de mutation et sécurisation de votre actif au {adresse_brute}"
                     paragraphe_cible = (
                         "Les procédures de mutation, de liquidation ou de transfert de propriété nécessitent une "
-                        "connaissance pointue du marché et des enjeux juridiques attenants.\n\n"
+                        "connaissance pointue du marché et des enjeux attenants.\n\n"
                         "Afin de protéger la valeur de cet actif immobilier pendant cette période de transition, "
                         "il est essentiel d'en maîtriser la valorisation exacte au regard des contraintes locales "
                         "(DPE, fiscalité locale, état de la copropriété). Notre structure est habituée à fluidifier "
@@ -234,12 +228,12 @@ with tab1:
                     )
                     destinataire = "Propriétaire / Ayants Droit"
                 else:
-                    objet_courrier = f"Audit patrimonial de votre bien situé au {adresse_brute}"
+                    objet_courrier = f"Audit de votre bien situé au {adresse_brute}"
                     paragraphe_cible = (
                         "La transmission d'un patrimoine immobilier s'anticipe. Qu'il s'agisse de préparer une "
                         "donation, d'évaluer une indivision ou de projeter une cession, la première étape est "
                         "toujours de figer la valeur vénale exacte de votre actif.\n\n"
-                        "Notre Cabinet Privé vous propose une approche sur-mesure et totalement confidentielle "
+                        "Notre Cabinet vous propose une approche sur-mesure et totalement confidentielle "
                         "pour auditer ce lot, en intégrant ses potentiels et les obligations réglementaires actuelles."
                     )
                     destinataire = "Propriétaire / Indivision"
@@ -255,17 +249,20 @@ Objet : {objet_courrier}
 
 {paragraphe_cible}
 
-Agissant en tant que Conseil en Immobilier Patrimonial, je vous assure d'une démarche empreinte de la plus stricte confidentialité et d'un total respect des situations familiales.
+Agissant en tant que professionnel de l'immobilier, je vous assure d'une démarche empreinte de la plus stricte confidentialité et d'un total respect des situations familiales.
 
 Je me tiens à votre disposition ou à celle de votre notaire pour toute étude approfondie de ce bien.
 
 Je vous prie de recevoir, Madame, Monsieur, l'expression de mes salutations dévouées.
 
 Nathalie Parra
-Conseil en Immobilier Patrimonial
 
 CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE"""
+AUDIT . TRANSACTION . CONSEIL
+
+---
+*Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur*
+*Membre de la FNAIM*"""
 
                 st.markdown("---")
                 st.text_area(
