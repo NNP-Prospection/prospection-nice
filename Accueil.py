@@ -854,7 +854,7 @@ if st.session_state.analyse_terminee and not st.session_state.df_affichage.empty
                     if choix_effectif.startswith("1."):
                         objet_courrier = (
                             "Réglementation des meublés de tourisme à Nice, DPE et"
-                            f" arbitrage patrimonial — {adresse.title()} ({str_reperage})"
+                            f" arbitrage — {adresse.title()} ({str_reperage})"
                         )
                         paragraphe_strategique = (
                             "Le durcissement simultané de la réglementation métropolitaine"
@@ -867,7 +867,7 @@ if st.session_state.analyse_terminee and not st.session_state.df_affichage.empty
                             " locative ou des travaux énergétiques lourds à la rentabilité"
                             " incertaine, une cession optimisée sur le marché actuel du"
                             " Carré d’Or permet de cristalliser votre plus-value nette"
-                            " auprès d’acquéreurs patrimoniaux ciblés."
+                            " auprès d’acquéreurs ciblés."
                         )
                     elif choix_effectif.startswith("2."):
                         objet_courrier = (
@@ -898,18 +898,18 @@ if st.session_state.analyse_terminee and not st.session_state.df_affichage.empty
                             " maximale de la Taxe d’Habitation sur les Résidences"
                             " Secondaires et logements peu occupés.\n\nAfin d’éviter que"
                             " ces charges et obligations de travaux n’érodent votre"
-                            " patrimoine, notre Cabinet réalise pour vous une simulation"
+                            " capital, notre Cabinet réalise pour vous une simulation"
                             " complète comparant le coût de conservation (travaux, fiscalité)"
                             " au capital net que vous dégageriez immédiatement en cas de"
                             " cession."
                         )
                     else:
                         objet_courrier = (
-                            "Optimisation patrimoniale et opportunité d’arbitrage pour"
+                            "Optimisation et opportunité d’arbitrage pour"
                             f" votre actif au {adresse.title()} ({str_reperage})"
                         )
                         paragraphe_strategique = (
-                            "Dans le cadre d’une gestion dynamique de votre patrimoine"
+                            "Dans le cadre d’une gestion dynamique de votre bien"
                             " immobilier et au regard des conditions de marché actuelles"
                             " sur les secteurs les plus recherchés de Nice (notamment après"
                             " un cycle de détention d’environ 5 ans), l’étude d’un"
@@ -931,14 +931,16 @@ if st.session_state.analyse_terminee and not st.session_state.df_affichage.empty
                         f"Adresse du bien : {adresse.title()}\n\n"
                         f"{appel_destinataire}\n\n"
                         f"Objet : {objet_courrier}\n\n"
-                        "En qualité de Conseil en Immobilier Patrimonial et forte d'une expertise pointue en droit de l'urbanisme, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.\n\n"
+                        "En qualité de professionnel de l'immobilier, je me permets de vous contacter directement concernant l'actif dont vous êtes propriétaire dans cet immeuble.\n\n"
                         f"{paragraphe_strategique}\n\n"
-                        "Je me tiens à votre entière disposition pour réaliser un audit patrimonial confidentiel (incluant le chiffrage précis de votre plus-value nette et des potentiels de votre lot) et vous accompagner dans vos réflexions.\n\n"
+                        "Je me tiens à votre entière disposition pour réaliser un audit confidentiel, une estimation actualisée et vous accompagner dans vos arbitrages.\n\n"
                         "Bien cordialement,\n\n"
-                        "Nathalie Parra\n"
-                        "Conseil en Immobilier Patrimonial\n\n"
+                        "Nathalie Parra\n\n"
                         "CABINET PRIVÉ IMMOBILIER HONORAT\n"
-                        "TRANSACTION . CONSEIL . PATRIMOINE"
+                        "AUDIT . TRANSACTION . CONSEIL\n\n"
+                        "---\n"
+                        "*Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur*\n"
+                        "*Membre de la FNAIM*\n"
                     )
 
                     st.text_area(
