@@ -50,7 +50,6 @@ def load_dpe_urbanisme():
 
 @st.cache_data
 def load_sitadel():
-    # Simulation du chargement de la base publique Sitadel2 (Permis et Déclarations)
     fichiers_sitadel = glob.glob('*sitadel*.csv') + glob.glob('*urbanisme*.csv')
     if fichiers_sitadel:
         try:
@@ -125,7 +124,6 @@ with tab1:
 
         df_affichage = df_dpe[list(colonnes_a_garder.keys())].rename(columns=colonnes_a_garder)
 
-        # Sécurité géographique : Nice et 06
         if 'Adresse Exacte' in df_affichage.columns:
             df_affichage = df_affichage[
                 df_affichage['Adresse Exacte']
@@ -134,7 +132,6 @@ with tab1:
                 .str.contains(r'nice|06\d{3}', regex=True, na=False)
             ]
 
-        # Sécurité mots entiers sur les quartiers
         rues_quartiers = {
             "Carré d'Or": ['france', 'massena', 'paradis', 'suede', 'verdun', 'meyerbeer', 'congres', 'cronstadt', 'buffa', 'alphonse karr', 'maccarani', 'liberte', 'longchamp', 'grimaldi', 'dalpozzo', 'halevy', 'marechal joffre', 'rivoli'],
             'Promenade des Anglais': ['promenade des anglais', 'etats-unis', 'quai des etats-unis'],
@@ -183,7 +180,6 @@ with tab1:
                 ligne_bien = df_affichage[df_affichage["Libellé Complet"] == bien_choisi].iloc[0]
                 adresse_brute = str(ligne_bien.get("Adresse Exacte", "")).title()
                 
-                # Simulation détection Sitadel
                 is_sitadel = not df_sitadel.empty and any(mot in adresse_brute.lower() for mot in ['france', 'massena', 'mont boron'])
                 
                 if type_operation.startswith("1.") or is_sitadel:
@@ -191,13 +187,12 @@ with tab1:
                 
                 date_jour = datetime.now().strftime("%d/%m/%Y")
                 
-                # Rédaction sur-mesure (Expertise Droit des Sols)
                 if type_operation.startswith("1."):
                     objet_courrier = f"Valorisation de vos nouveaux lots suite à déclaration préalable au {adresse_brute}"
                     paragraphe_cible = (
                         "La division d'un bien immobilier est une excellente stratégie de création de valeur, mais "
-                        "elle modifie substantiellement le positionnement de vos actifs sur le marché niçois.\n\n"
-                        "Forte d'une formation spécifique en instruction du droit des sols et d'une parfaite connaissance "
+                        "elle modifie substantiellement le positionnement sur le marché niçois.\n\n"
+                        "Forte d'une parfaite connaissance "
                         "des dynamiques locales, je vous propose une étude de commercialisation sur-mesure pour vos lots nouvellement "
                         "créés. Cette évaluation prendra en compte la rareté de ces surfaces sur votre secteur et les "
                         "attentes précises des investisseurs actuels."
@@ -205,20 +200,20 @@ with tab1:
                 elif type_operation.startswith("2."):
                     objet_courrier = f"Changement de destination et impact sur la valeur vénale de votre bien au {adresse_brute}"
                     paragraphe_cible = (
-                        "Les démarches d'urbanisme visant à modifier la destination d'un local (transformation d'un "
-                        "bureau ou commerce en habitation) constituent un levier patrimonial majeur, particulièrement "
+                        "Les démarches visant à modifier la destination d'un local (transformation d'un "
+                        "bureau ou commerce en habitation) constituent un levier majeur, particulièrement "
                         "recherché dans notre hyper-centre.\n\n"
-                        "Bénéficiant d'une expertise technique en droit de l'urbanisme, notre Cabinet est qualifié pour "
-                        "traduire cette nouvelle conformité administrative en une réelle plus-value financière. Je vous "
+                        "Bénéficiant d'une solide expérience sur le marché niçois, notre Cabinet est qualifié pour "
+                        "traduire cette nouvelle configuration en une réelle plus-value financière. Je vous "
                         "propose un audit confidentiel pour chiffrer l'impact direct de ce changement de destination "
-                        "sur votre patrimoine."
+                        "sur votre bien."
                     )
                 else:
-                    objet_courrier = f"Accompagnement de votre projet immobilier en secteur sauvegardé au {adresse_brute}"
+                    objet_courrier = f"Accompagnement de votre projet immobilier au {adresse_brute}"
                     paragraphe_cible = (
-                        "Concevoir et faire valider un projet de restructuration ou de surélévation dans un secteur "
-                        "soumis à l'avis des Architectes des Bâtiments de France (ABF) demande une rigueur exceptionnelle.\n\n"
-                        "Ancienne responsable du développement et formée à l'instruction du droit des sols, j'accompagne "
+                        "Concevoir et faire valider un projet de restructuration ou de surélévation "
+                        "demande une rigueur exceptionnelle.\n\n"
+                        "Ancienne responsable du développement, j'accompagne "
                         "les propriétaires dans la valorisation de ces actifs complexes. Une fois les autorisations purgées, "
                         "la rareté de ce type de bien réhabilité dans le patrimoine niçois justifie un positionnement "
                         "haut de gamme que je vous propose d'évaluer lors d'un rendez-vous confidentiel."
@@ -235,15 +230,18 @@ Objet : {objet_courrier}
 
 {paragraphe_cible}
 
-Je me tiens à votre entière disposition pour vous remettre une étude patrimoniale détaillée, intégrant à la fois la rentabilité locative potentielle de votre projet et sa valeur de revente estimée sur le marché actuel.
+Je me tiens à votre entière disposition pour vous remettre une étude détaillée, intégrant à la fois la rentabilité locative potentielle de votre projet et sa valeur de revente estimée sur le marché actuel.
 
 Dans l'attente de nos échanges, je vous prie de recevoir, Madame, Monsieur, l'expression de mes salutations distinguées.
 
 Nathalie Parra
-Conseil en Immobilier Patrimonial
 
 CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE"""
+AUDIT . TRANSACTION . CONSEIL
+
+---
+*Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur*
+*Membre de la FNAIM*"""
 
                 st.markdown("---")
                 st.text_area(
@@ -272,5 +270,4 @@ with tab2:
         st.info("📥 Fichier Sitadel non détecté. Placez un fichier CSV contenant 'sitadel' ou 'urbanisme' dans votre répertoire de travail.")
     else:
         st.success(f"Base Sitadel chargée avec succès ({len(df_sitadel)} dossiers d'urbanisme détectés).")
-        # Affichage générique sécurisé des colonnes disponibles
         st.dataframe(df_sitadel.head(100), use_container_width=True)
