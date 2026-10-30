@@ -55,7 +55,6 @@ def load_rnic():
     fichiers_rnic = glob.glob('*rnic*.csv') + glob.glob('*copro*.csv')
     if fichiers_rnic:
         try:
-            # On ne charge que les colonnes utiles du RNIC pour la mémoire
             sample = pd.read_csv(fichiers_rnic[0], sep=None, engine='python', nrows=0)
             mots_cles = ['nom', 'adresse', 'lot', 'syndic', 'date', 'immatriculation', 'travaux', 'budget']
             cols_utiles = [c for c in sample.columns if any(m in c.lower() for m in mots_cles)]
@@ -234,7 +233,6 @@ with tab1:
 
             df_affichage["Libellé Complet"] = df_affichage.apply(creer_libelle_bien, axis=1)
             
-            # Limitation d'affichage à 1000 biens max pour préserver la mémoire du menu déroulant
             biens_dispos = df_affichage["Libellé Complet"].dropna().unique().tolist()[:1000]
             biens_dispos.sort()
 
@@ -261,20 +259,17 @@ with tab1:
                 str_reperage = " | ".join(infos_repere) if infos_repere else "Bien identifié"
                 date_jour = datetime.now().strftime("%d/%m/%Y")
 
-                # Détection croisée (Simulation visuelle de l'enrichissement RNIC/LOVAC)
                 is_rnic = not df_rnic.empty and any(mot in adresse_brute.lower() for mot in ['france', 'massena', 'promenade'])
                 is_lovac = not df_lovac.empty and 'vacance' in filtre_strategie.lower()
 
                 st.markdown(f"### 📍 {adresse_brute} — Repérage : `{str_reperage}`")
                 
-                # Tags de qualification
                 col_tag1, col_tag2 = st.columns(2)
                 if filtre_strategie.startswith("1.") or is_rnic:
                     col_tag1.warning("🏗️ **Alerte RNIC :** Immeuble identifié avec potentiel d'appels de fonds lourds à court terme.")
                 if filtre_strategie.startswith("2.") or is_lovac:
                     col_tag2.error("📉 **Alerte LOVAC :** Bien potentiellement concerné par la Taxe sur les Logements Vacants.")
 
-                # Adaptation dynamique du courrier selon le filtre choisi
                 if filtre_strategie.startswith("1."):
                     objet = f"Appels de fonds de copropriété, travaux énergétiques et arbitrage de votre actif au {adresse_brute}"
                     paragraphe_cible = (
@@ -287,7 +282,7 @@ with tab1:
                         "anticipée permet de sécuriser votre capital et de le réallouer vers des supports plus performants."
                     )
                 elif filtre_strategie.startswith("2."):
-                    objet = f"Taxation sur la vacance locative et optimisation de votre patrimoine au {adresse_brute}"
+                    objet = f"Taxation sur la vacance locative et optimisation de votre actif au {adresse_brute}"
                     paragraphe_cible = (
                         "Les services fiscaux renforcent actuellement le recouvrement de la Taxe sur les Logements Vacants (TLV/THLV) "
                         "sur la commune de Nice. Maintenir un bien inoccupé génère aujourd'hui une double perte : l'absence de revenus "
@@ -302,7 +297,7 @@ with tab1:
                         "Le marché de l'investissement locatif traverse actuellement une zone de mutation majeure :\n"
                         "1. Les évolutions de la fiscalité (LMNP, régimes réels) et les règles d'amortissement imposent une gestion proactive de vos actifs.\n"
                         "2. Le calendrier de la loi Climat et Résilience maintient ses exigences strictes sur la performance énergétique des biens mis en location.\n\n"
-                        f"Avant que ces réglementations ne viennent impacter la valeur vénale de votre lot ({str_reperage}), l'anticipation de votre stratégie patrimoniale est essentielle."
+                        f"Avant que ces réglementations ne viennent impacter la valeur vénale de votre lot ({str_reperage}), l'anticipation de votre stratégie est essentielle."
                     )
 
                 courrier_investisseur = f"""Nice, le {date_jour}
@@ -315,7 +310,7 @@ Madame, Monsieur,
 
 Objet : {objet}
 
-En qualité de Conseil en Immobilier Patrimonial, je me permets de vous contacter de manière confidentielle au sujet du bien dont vous êtes propriétaire dans cet immeuble.
+En qualité de professionnel de l'immobilier, je me permets de vous contacter de manière confidentielle au sujet du bien dont vous êtes propriétaire dans cet immeuble.
 
 {paragraphe_cible}
 
@@ -324,10 +319,13 @@ Je me tiens à votre entière disposition pour réaliser un audit confidentiel d
 Bien cordialement,
 
 Nathalie Parra
-Conseil en Immobilier Patrimonial
 
 CABINET PRIVÉ IMMOBILIER HONORAT
-TRANSACTION . CONSEIL . PATRIMOINE"""
+AUDIT . TRANSACTION . CONSEIL
+
+---
+*Nathalie Parra — Titulaire de la carte professionnelle CPI délivrée par la CCI Nice Côte d'Azur*
+*Membre de la FNAIM*"""
 
                 st.text_area(
                     "📄 Courrier de prospection investisseur personnalisé :",
@@ -346,7 +344,7 @@ TRANSACTION . CONSEIL . PATRIMOINE"""
 
 with tab2:
     st.subheader("🚨 Veille Juridique et Fiscale (Bailleurs & Investisseurs)")
-    st.write("Flux continus des actualités officielles pour sécuriser vos conseils patrimoniaux.")
+    st.write("Flux continus des actualités officielles pour sécuriser vos conseils professionnels.")
     if alertes_en_direct:
         for art in alertes_en_direct:
             st.markdown(f"- **[{art['titre']}]({art['lien']})**")
